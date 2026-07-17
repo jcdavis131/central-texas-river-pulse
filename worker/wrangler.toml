@@ -1,0 +1,16 @@
+name = "central-texas-river-pulse-api"
+main = "src/index.ts"
+compatibility_date = "2024-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/15 * * * *"] # free tier 1 cron allowed, 15-min matches Hydromet
+
+[vars]
+LCRA_BASE = "https://hydromet.lcra.org"
+USGS_BBOX = "-101,28.5,-96,31.5"
+
+# Optional R2 for future historical caching - commented free tier
+# [[r2_buckets]]
+# binding = "R2"
+# bucket_name = "river-pulse-raw"

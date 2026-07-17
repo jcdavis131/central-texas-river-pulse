@@ -1,0 +1,63 @@
+/* AAA contrast per Sunni SCAD critique + Okabe-Ito safe palette */
+:root {
+  --bg: #FCFBF8;
+  --surface: #FFFFFF;
+  --surface-2: #F2F0EB;
+  --border: #E8E4DC;
+  --text: #1A1D23;
+  --dim: #6B7280;
+  --accent: #0072B2; /* Okabe-Ito blue flow */
+  --safe-green: #009E73;
+  --safe-yellow: #E69F00; /* caution */
+  --safe-red: #D55E00; /* alert orange per spec */
+  --safe-unknown: #8A8F98;
+  --shadow-lg: 0 10px 30px rgba(26,29,35,0.10), 0 2px 8px rgba(26,29,35,0.06);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-system, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.65;
+  font-size: 18px; /* per AGENTS.md readability */
+}
+.font-serif { font-family: ui-serif, Georgia, serif; }
+.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.leaflet-container {
+  font-family: ui-sans-system, sans-serif;
+  background: #E8E4DC;
+  border-radius: 16px;
+}
+
+/* bottom tabs 56px */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0); }
+
+/* safety badges */
+.badge-green { background: rgba(0,158,115,0.14); color: var(--safe-green); }
+.badge-yellow { background: rgba(230,159,0,0.18); color: var(--safe-yellow); }
+.badge-red { background: rgba(213,94,0,0.18); color: var(--safe-red); }
+.badge-unknown { background: rgba(138,143,152,0.15); color: var(--safe-unknown); }
+
+/* scrollbar hide */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* marker */
+.gauge-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.dot-green { background: var(--safe-green); }
+.dot-yellow { background: var(--safe-yellow); }
+.dot-red { background: var(--safe-red); }
+.dot-unknown { background: var(--safe-unknown); }
+.dot-river { width: 14px; height: 14px; }
+.dot-rain { width: 10px; height: 10px; opacity: 0.9; }
+
+.leaflet-popup-content-wrapper { border-radius: 12px; }
