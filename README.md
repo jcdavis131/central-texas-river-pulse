@@ -2,13 +2,13 @@
 
 > Solo personal project, no connection to employer, built with public/free-tier only. Data is public, automatically retrieved and subject to revision.
 
-Free-tier, real-time river hub for **all Central Texas river authorities** — including San Antonio River — covering Colorado (Highland Lakes to Matagorda), Llano, Pedernales, Guadalupe, Comal, San Marcos, San Antonio, and lower Brazos. Lat 28.5–31.5, Lon -101 to -96.
+Free-tier, real-time river conditions hub for Central Texas basins — Colorado (Highland Lakes to Matagorda), Llano, Pedernales, Guadalupe, Comal, San Marcos, San Antonio, and lower Brazos. Coverage box: lat 28.5–31.5, lon -101 to -96.
 
-Merges point truth (LCRA Hydromet 406 sites + USGS Water Services) with area truth (NEXRAD radar, NASA GIBS, satellite context) to help people live, work, recreate, and conserve safely.
+Merges point data (LCRA Hydromet sites + USGS Water Services) with area data (NEXRAD radar mosaic, drought and soil-moisture layers) into one normalized JSON and one map.
 
 ### Why this exists
 
-LCRA Hydromet is 280+ gauges, 15-min updates, streamflow cfs + stage ft + rainfall 27 variants + temp/humidity, plus COA/USGS/Hays/GBRA. But it's Lower Colorado only. Texas has 24 river authorities, each with its own 1998-style site. No unified real-time layer.
+LCRA Hydromet covers hundreds of gauges with 15-minute updates (streamflow, stage, rainfall, temperature), but it is Lower Colorado only. Texas river authorities each publish through their own separate sites, with no unified real-time layer for the region.
 
 This repo is the aggregator: one normalized JSON, one map, zero paid APIs.
 
@@ -25,7 +25,7 @@ This repo is the aggregator: one normalized JSON, one map, zero paid APIs.
 ### Quickstart
 
 ```bash
-git clone https://github.com/you/central-texas-river-pulse
+git clone https://github.com/jcdavis131/central-texas-river-pulse
 cd central-texas-river-pulse
 bun install   # or npm install
 # frontend
@@ -76,12 +76,9 @@ See `docs/API.md` for full list and community lib `lancereinsmith/lcra`.
 
 ### Satellite - future layer (see `docs/SATELLITE.md`)
 
-- Sentinel-1 SAR flood via Copernicus Dataspace - 10m, IW mode, sees through clouds, 250x250km. Used for Harvey/Imelda mapping >94% accurate SE TX.
-- NASA SWOT - caught 30ft tall, 166-mile long flood wave on Colorado River south of Austin Jan 2024, tracked to Matagorda Bay. Measures river height/width from space. 21-day revisit, 10-day US. Fills ungauged gaps.
-- Sentinel-2 NDWI / Landsat 8-9 for reservoir area, turbidity (red band), chlorophyll-a, surface water temp.
-- GOES-16 + GPM IMERG for rain in gauge gaps.
+Planned, not yet implemented: Sentinel-1 SAR flood extent, NASA SWOT river height/width, Sentinel-2/Landsat water indices, and GOES-16/GPM IMERG precipitation for gauge gaps.
 
-### Design notes (Sunni-approved)
+### Design notes
 
 - AAA contrast, Okabe-Ito safe palette: #0072B2 blue flow, #D55E00 orange alert, #009E73 green safe, #E69F00 yellow caution
 - 18px/1.65 readability, 56px bottom tabs
@@ -104,4 +101,4 @@ npx wrangler pages deploy frontend/dist
 cd worker && npx wrangler deploy
 ```
 
-GitHub Action in `.github/workflows/deploy.yml` does both on push to main.
+Deploys are run manually with the commands above. CI currently runs lint only (`.github/workflows/lint.yml`).
