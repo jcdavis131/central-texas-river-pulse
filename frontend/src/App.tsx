@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { useGauges } from '../hooks/useGauges'
-import { MapView } from './Map'
-import { GaugeList } from './GaugeList'
-import { SafetyPanel } from './Safety'
-import type { NormalizedGauge } from '../lib/lcra'
+import { useGauges } from './hooks/useGauges'
+import { MapView } from './components/Map'
+import { GaugeList } from './components/GaugeList'
+import { SafetyPanel } from './components/Safety'
+import { Flyway } from './components/Flyway'
+import type { NormalizedGauge } from './lib/lcra'
 
-type Tab = 'map' | 'gauges' | 'safety' | 'learn'
+type Tab = 'map' | 'gauges' | 'safety' | 'flyway' | 'learn'
 
 export default function App() {
   const { gauges, loading, error, lastUpdated, refresh } = useGauges('/api/gauges')
@@ -48,6 +49,7 @@ export default function App() {
         )}
         {tab === 'gauges' && <GaugeList gauges={gauges} onSelect={setSelectedGauge} />}
         {tab === 'safety' && <SafetyPanel gauges={gauges} />}
+        {tab === 'flyway' && <Flyway />}
         {tab === 'learn' && (
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700 }}>How this works - Point + Area</h2>
@@ -96,6 +98,7 @@ export default function App() {
           {id:'map', label:'Map', icon:'◍'},
           {id:'gauges', label:'Gauges', icon:'≋'},
           {id:'safety', label:'Safety', icon:'⚑'},
+          {id:'flyway', label:'Flyway', icon:'◈'},
           {id:'learn', label:'Learn', icon:'◑'},
         ].map(t=> (
           <button key={t.id} onClick={()=>setTab(t.id as Tab)} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, background: 'transparent', border: 'none', color: tab===t.id?'#1A1D23':'#6B7280' }}>
