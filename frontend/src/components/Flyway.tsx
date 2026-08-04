@@ -14,8 +14,10 @@ const STAT_ABBR: Record<StatKey, string> = { flight: 'FLT', instinct: 'INS', cha
 const STAT_LABEL: Record<StatKey, string> = { flight: 'Flight', instinct: 'Instinct', charm: 'Charm', grit: 'Grit' }
 const FLASH_MS = 650
 const OFFSET_X = (GRID_SIZE - 1) * (TILE_W / 2)
-const CONTAINER_W = 2 * (GRID_SIZE - 1) * (TILE_W / 2) + TILE_W
-const CONTAINER_H = 2 * (GRID_SIZE - 1) * (TILE_H / 2) + TILE_H
+const WORLD_W = GRID_SIZE * TILE_W
+const WORLD_H = GRID_SIZE * TILE_H
+const VIEWPORT_W = 380
+const VIEWPORT_H = 220
 
 function tilePos(row: number, col: number) {
   return { left: (col - row) * (TILE_W / 2) + OFFSET_X, top: (col + row) * (TILE_H / 2) }
@@ -62,8 +64,9 @@ function CharacterCreation({ onCreate }: { onCreate: (c: Character) => void }) {
         <div className="flyway-pixel" style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 10 }}>ISOPOLIS</div>
         <h2 className="flyway-pixel" style={{ fontSize: 15, fontWeight: 400, margin: 0, lineHeight: 1.6 }}>FLYWAY</h2>
         <p style={{ fontSize: 15, color: 'var(--dim)', marginTop: 8, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
-          Become a bird. Fly free over the Central Texas basins — Hill Country ridges, the Highland Lakes, the spring-fed
-          Comal and San Marcos, the Mission Reach, and out to the Brazos floodplain. Roll-under mechanic inspired by <em>I, Toaster</em>.
+          Become a bird. Fly free over the actual rivers and lakes this app tracks, full scale - the Highland Lakes chain
+          down the Colorado through Austin, the spring-fed Guadalupe/Comal/San Marcos, the San Antonio missions, the
+          Hill Country headwaters, and out to the Brazos and the coast. Roll-under mechanic inspired by <em>I, Toaster</em>.
         </p>
       </div>
 
@@ -149,7 +152,7 @@ export function Flyway() {
     const update = () => {
       const available = el.clientWidth
       if (available <= 0) return
-      setScale(Math.min(1, available / CONTAINER_W))
+      setScale(Math.min(1, available / VIEWPORT_W))
     }
     update()
     const ro = new ResizeObserver(update)
@@ -195,6 +198,8 @@ export function Flyway() {
 
     setGame(g => ({ ...g, row: nr, col: nc, wind: g.wind - 1 }))
 
+    const placeName = tile.poi ?? biome.label
+
     if (!discoveredSet.has(key)) {
       setGame(g => ({ ...g, discovered: [...g.discovered, key] }))
       const enc = pick(biome.encounters)
@@ -202,10 +207,10 @@ export function Flyway() {
       const statVal = species.stats[enc.stat]
       const result = rollUnder(statVal, bonus)
       const suffix = `(2D6=${result.roll}${bonus ? ` -${bonus} trait` : ''} vs ${STAT_LABEL[enc.stat]} ${statVal})`
-      addLog(`${biome.label}: ${result.success ? enc.success : enc.fail} ${suffix}`, result.success ? 'success' : 'fail')
+      addLog(`${placeName}: ${result.success ? enc.success : enc.fail} ${suffix}`, result.success ? 'success' : 'fail')
       setFlash({ key, tone: result.success ? 'success' : 'fail' })
     } else {
-      addLog(`Back over ${biome.label.toLowerCase()}. ${biome.description}`, 'info')
+      addLog(`Back over ${tile.poi ?? biome.label.toLowerCase()}. ${biome.description}`, 'info')
     }
   }
 
@@ -266,42 +271,58 @@ export function Flyway() {
       </div>
 
       <div ref={wrapRef} style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ position: 'relative', width: CONTAINER_W * scale, height: CONTAINER_H * scale, flexShrink: 0 }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: CONTAINER_W, height: CONTAINER_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-            {world.flat().map(tile => {
-              const { left, top } = tilePos(tile.row, tile.col)
-              const biome = BIOMES[tile.biome]
-              const key = `${tile.row},${tile.col}`
-              const isHere = tile.row === game.row && tile.col === game.col
-              const isDiscovered = discoveredSet.has(key)
-              const isAdjacent = Math.abs(tile.row - game.row) + Math.abs(tile.col - game.col) === 1
-              const isFlashing = flash?.key === key
-              const flashClass = isFlashing ? (flash!.tone === 'success' ? 'flyway-flash-success flyway-tile-pop' : 'flyway-flash-fail flyway-tile-pop') : ''
-              return (
-                <div key={key}
-                  className={flashClass}
-                  onClick={() => isAdjacent && move(tile.row - game.row, tile.col - game.col)}
-                  role={isAdjacent ? 'button' : undefined}
-                  aria-label={isAdjacent ? `Fly to ${biome.label}` : undefined}
-                  title={biome.label}
-                  style={{
-                    position: 'absolute', left, top, width: TILE_W, height: TILE_H,
-                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-                    background: biome.color,
-                    opacity: isDiscovered ? 0.95 : 0.45,
-                    outline: isHere ? '2px solid white' : isAdjacent ? '1px solid rgba(255,255,255,0.6)' : 'none',
-                    outlineOffset: -2,
-                    cursor: isAdjacent ? 'pointer' : 'default',
-                  }}
-                />
-              )
-            })}
+        <div style={{ position: 'relative', width: VIEWPORT_W * scale, height: VIEWPORT_H * scale, flexShrink: 0 }}>
+          <div style={{
+            position: 'absolute', top: 0, left: 0, width: VIEWPORT_W, height: VIEWPORT_H,
+            overflow: 'hidden', borderRadius: 16, background: '#CBD5C0',
+            transform: `scale(${scale})`, transformOrigin: 'top left',
+          }}>
             <div style={{
-              position: 'absolute', left: birdPos.left + TILE_W / 2 - 12, top: birdPos.top + TILE_H / 2 - 14,
-              fontSize: 20, transition: 'left 0.2s, top 0.2s', pointerEvents: 'none', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.3))',
+              position: 'absolute',
+              left: VIEWPORT_W / 2 - (birdPos.left + TILE_W / 2),
+              top: VIEWPORT_H / 2 - (birdPos.top + TILE_H / 2),
+              width: WORLD_W, height: WORLD_H,
+              transition: 'left 0.2s, top 0.2s',
+            }}>
+              {world.flat().map(tile => {
+                const { left, top } = tilePos(tile.row, tile.col)
+                const biome = BIOMES[tile.biome]
+                const key = `${tile.row},${tile.col}`
+                const placeName = tile.poi ?? biome.label
+                const isHere = tile.row === game.row && tile.col === game.col
+                const isDiscovered = discoveredSet.has(key)
+                const isAdjacent = Math.abs(tile.row - game.row) + Math.abs(tile.col - game.col) === 1
+                const isFlashing = flash?.key === key
+                const flashClass = isFlashing ? (flash!.tone === 'success' ? 'flyway-flash-success flyway-tile-pop' : 'flyway-flash-fail flyway-tile-pop') : ''
+                return (
+                  <div key={key}
+                    className={flashClass}
+                    onClick={() => isAdjacent && move(tile.row - game.row, tile.col - game.col)}
+                    role={isAdjacent ? 'button' : undefined}
+                    aria-label={isAdjacent ? `Fly to ${placeName}` : undefined}
+                    title={placeName}
+                    style={{
+                      position: 'absolute', left, top, width: TILE_W, height: TILE_H,
+                      clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                      background: biome.color,
+                      opacity: isDiscovered ? 0.95 : 0.45,
+                      outline: isHere ? '2px solid white' : isAdjacent ? '1px solid rgba(255,255,255,0.6)' : 'none',
+                      outlineOffset: -2,
+                      cursor: isAdjacent ? 'pointer' : 'default',
+                    }}
+                  />
+                )
+              })}
+            </div>
+            <div style={{
+              position: 'absolute', left: VIEWPORT_W / 2 - 12, top: VIEWPORT_H / 2 - 14,
+              fontSize: 20, pointerEvents: 'none', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.3))',
             }}>{species.emoji}</div>
           </div>
         </div>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--dim)', textAlign: 'center' }}>
+        Currently over {world[game.row][game.col].poi ?? BIOMES[world[game.row][game.col].biome].label}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
