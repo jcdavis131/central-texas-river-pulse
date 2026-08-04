@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   SPECIES, TRAITS, BIOMES, GRID_SIZE, START_POS,
   generateWorld, maxWind, rollUnder, pick,
@@ -11,10 +11,20 @@ const TILE_W = 56
 const TILE_H = 28
 const LOG_LIMIT = 8
 const STAT_ABBR: Record<StatKey, string> = { flight: 'FLT', instinct: 'INS', charm: 'CHM', grit: 'GRT' }
+const STAT_LABEL: Record<StatKey, string> = { flight: 'Flight', instinct: 'Instinct', charm: 'Charm', grit: 'Grit' }
+const FLASH_MS = 650
+const OFFSET_X = (GRID_SIZE - 1) * (TILE_W / 2)
+const CONTAINER_W = 2 * (GRID_SIZE - 1) * (TILE_W / 2) + TILE_W
+const CONTAINER_H = 2 * (GRID_SIZE - 1) * (TILE_H / 2) + TILE_H
+
+function tilePos(row: number, col: number) {
+  return { left: (col - row) * (TILE_W / 2) + OFFSET_X, top: (col + row) * (TILE_H / 2) }
+}
 
 interface Character { speciesId: string; traitIds: string[]; name: string }
 interface LogEntry { id: number; text: string; tone: 'success' | 'fail' | 'info' }
 interface GameState { row: number; col: number; wind: number; discovered: string[]; log: LogEntry[] }
+interface FlashState { key: string; tone: 'success' | 'fail' }
 
 function loadCharacter(): Character | null {
   try {
@@ -47,43 +57,46 @@ function CharacterCreation({ onCreate }: { onCreate: (c: Character) => void }) {
   const canConfirm = !!speciesId && traitIds.length === 2 && name.trim().length > 0
 
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Isopolis: Flyway</h2>
-        <p style={{ fontSize: 13, color: 'var(--dim)', marginTop: 4 }}>
-          Become a bird. Fly free over the Central Texas basins - Hill Country ridges, the Highland Lakes, the spring-fed
+    <div className="flyway-root" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ textAlign: 'center', padding: '12px 8px 4px' }}>
+        <div className="flyway-pixel" style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 10 }}>ISOPOLIS</div>
+        <h2 className="flyway-pixel" style={{ fontSize: 15, fontWeight: 400, margin: 0, lineHeight: 1.6 }}>FLYWAY</h2>
+        <p style={{ fontSize: 15, color: 'var(--dim)', marginTop: 8, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
+          Become a bird. Fly free over the Central Texas basins — Hill Country ridges, the Highland Lakes, the spring-fed
           Comal and San Marcos, the Mission Reach, and out to the Brazos floodplain. Roll-under mechanic inspired by <em>I, Toaster</em>.
         </p>
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8 }}>1. Choose your species</div>
+        <div className="flyway-pixel" style={{ fontSize: 10, color: 'var(--dim)', marginBottom: 8 }}>1. CHOOSE YOUR SPECIES</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
           {SPECIES.map(s => (
             <button key={s.id} onClick={() => setSpeciesId(s.id)}
+              aria-pressed={speciesId === s.id}
               style={{ textAlign: 'left', padding: 10, borderRadius: 12, border: speciesId === s.id ? '2px solid var(--accent)' : '1px solid var(--border)', background: speciesId === s.id ? 'rgba(0,114,178,0.08)' : 'white', cursor: 'pointer' }}>
               <div style={{ fontSize: 20 }}>{s.emoji}</div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{s.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--dim)' }}>{s.epithet}</div>
-              <div style={{ fontSize: 11, marginTop: 6, fontFamily: 'monospace', color: 'var(--dim)' }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--dim)' }}>{s.epithet}</div>
+              <div style={{ fontSize: 13, marginTop: 6, fontFamily: 'ui-monospace, monospace', color: 'var(--dim)' }}>
                 FLT {s.stats.flight} · INS {s.stats.instinct} · CHM {s.stats.charm} · GRT {s.stats.grit}
               </div>
             </button>
           ))}
         </div>
-        {speciesId && <p style={{ fontSize: 12, color: 'var(--dim)', marginTop: 8 }}>{SPECIES.find(s => s.id === speciesId)?.blurb}</p>}
+        {speciesId && <p style={{ fontSize: 13, color: 'var(--dim)', marginTop: 8 }}>{SPECIES.find(s => s.id === speciesId)?.blurb}</p>}
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8 }}>2. Pick 2 traits ({traitIds.length}/2)</div>
+        <div className="flyway-pixel" style={{ fontSize: 10, color: 'var(--dim)', marginBottom: 8 }}>2. PICK 2 TRAITS ({traitIds.length}/2)</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {TRAITS.map(t => {
             const active = traitIds.includes(t.id)
             const disabled = !active && traitIds.length >= 2
             return (
               <button key={t.id} onClick={() => toggleTrait(t.id)} disabled={disabled}
+                aria-pressed={active}
                 title={t.blurb}
-                style={{ fontSize: 12, padding: '6px 12px', borderRadius: 999, border: active ? '2px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(0,114,178,0.08)' : 'white', opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+                style={{ fontSize: 14, padding: '6px 12px', borderRadius: 999, border: active ? '2px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(0,114,178,0.08)' : 'white', opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
                 {t.label}
               </button>
             )
@@ -92,15 +105,17 @@ function CharacterCreation({ onCreate }: { onCreate: (c: Character) => void }) {
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8 }}>3. Name your bird</div>
+        <div className="flyway-pixel" style={{ fontSize: 10, color: 'var(--dim)', marginBottom: 8 }}>3. NAME YOUR BIRD</div>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Skeet" maxLength={24}
-          style={{ width: '100%', maxWidth: 280, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14 }} />
+          aria-label="Bird name"
+          style={{ width: '100%', maxWidth: 280, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 16 }} />
       </div>
 
       <button onClick={() => canConfirm && onCreate({ speciesId: speciesId!, traitIds, name: name.trim() })}
         disabled={!canConfirm}
-        style={{ alignSelf: 'flex-start', padding: '10px 20px', borderRadius: 999, border: 'none', background: canConfirm ? 'var(--text)' : 'var(--border)', color: 'white', fontWeight: 700, cursor: canConfirm ? 'pointer' : 'not-allowed' }}>
-        Take flight
+        className="flyway-pixel"
+        style={{ alignSelf: 'flex-start', padding: '14px 20px', borderRadius: 10, border: 'none', background: canConfirm ? 'var(--text)' : 'var(--border)', color: 'white', fontSize: 11, cursor: canConfirm ? 'pointer' : 'not-allowed' }}>
+        TAKE FLIGHT
       </button>
     </div>
   )
@@ -114,6 +129,11 @@ export function Flyway() {
 
   const [game, setGame] = useState<GameState>(() => loadState(species ? maxWind(species.stats.grit) : 12))
   const [nextLogId, setNextLogId] = useState(1)
+  const [flash, setFlash] = useState<FlashState | null>(null)
+  const [confirmingRelease, setConfirmingRelease] = useState(false)
+
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
 
   useEffect(() => {
     if (character) localStorage.setItem(CHAR_KEY, JSON.stringify(character))
@@ -122,6 +142,26 @@ export function Flyway() {
   useEffect(() => {
     localStorage.setItem(STATE_KEY, JSON.stringify(game))
   }, [game])
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const update = () => {
+      const available = el.clientWidth
+      if (available <= 0) return
+      setScale(Math.min(1, available / CONTAINER_W))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [species])
+
+  useEffect(() => {
+    if (!flash) return
+    const id = setTimeout(() => setFlash(null), FLASH_MS)
+    return () => clearTimeout(id)
+  }, [flash])
 
   const maxW = species ? maxWind(species.stats.grit) : 0
   const discoveredSet = new Set(game.discovered)
@@ -159,11 +199,11 @@ export function Flyway() {
       setGame(g => ({ ...g, discovered: [...g.discovered, key] }))
       const enc = pick(biome.encounters)
       const bonus = traits.filter(t => t.bonusStat === enc.stat).length
-      const statVal = species!.stats[enc.stat]
+      const statVal = species.stats[enc.stat]
       const result = rollUnder(statVal, bonus)
-      const statLabel: Record<StatKey, string> = { flight: 'Flight', instinct: 'Instinct', charm: 'Charm', grit: 'Grit' }
-      const suffix = `(2D6=${result.roll}${bonus ? ` -${bonus} trait` : ''} vs ${statLabel[enc.stat]} ${statVal})`
+      const suffix = `(2D6=${result.roll}${bonus ? ` -${bonus} trait` : ''} vs ${STAT_LABEL[enc.stat]} ${statVal})`
       addLog(`${biome.label}: ${result.success ? enc.success : enc.fail} ${suffix}`, result.success ? 'success' : 'fail')
+      setFlash({ key, tone: result.success ? 'success' : 'fail' })
     } else {
       addLog(`Back over ${biome.label.toLowerCase()}. ${biome.description}`, 'info')
     }
@@ -171,6 +211,7 @@ export function Flyway() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault()
       if (e.key === 'ArrowUp' || e.key === 'w') move(-1, 0)
       else if (e.key === 'ArrowDown' || e.key === 's') move(1, 0)
       else if (e.key === 'ArrowLeft' || e.key === 'a') move(0, -1)
@@ -191,105 +232,117 @@ export function Flyway() {
     }} />
   }
 
-  const releaseBird = () => {
-    if (!window.confirm(`Release ${character.name} back into the wild? This clears your saved bird and progress.`)) return
+  const confirmRelease = () => {
     localStorage.removeItem(CHAR_KEY)
     localStorage.removeItem(STATE_KEY)
+    setConfirmingRelease(false)
     setCharacter(null)
   }
 
-  const offsetX = (GRID_SIZE - 1) * (TILE_W / 2)
-  const containerW = 2 * (GRID_SIZE - 1) * (TILE_W / 2) + TILE_W
-  const containerH = 2 * (GRID_SIZE - 1) * (TILE_H / 2) + TILE_H
-
-  const tilePos = (row: number, col: number) => ({
-    left: (col - row) * (TILE_W / 2) + offsetX,
-    top: (col + row) * (TILE_H / 2),
-  })
-
   const birdPos = tilePos(game.row, game.col)
-  const statLabel: Record<StatKey, string> = { flight: 'Flight', instinct: 'Instinct', charm: 'Charm', grit: 'Grit' }
 
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="flyway-root" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{species.emoji} {character.name}</div>
-          <div style={{ fontSize: 11, color: 'var(--dim)' }}>{species.name} · {species.epithet} · {traits.map(t => t.label).join(' + ')}</div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{species.emoji} {character.name}</div>
+          <div style={{ fontSize: 13, color: 'var(--dim)' }}>{species.name} · {species.epithet} · {traits.map(t => t.label).join(' + ')}</div>
         </div>
-        <button onClick={releaseBird} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--border)', background: 'white', color: 'var(--dim)' }}>Release bird</button>
+        <button onClick={() => setConfirmingRelease(true)} aria-label="Release bird" style={{ fontSize: 13, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--border)', background: 'white', color: 'var(--dim)' }}>Release bird</button>
       </div>
 
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--dim)', marginBottom: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--dim)', marginBottom: 4 }}>
           <span>Wind</span><span>{game.wind} / {maxW}</span>
         </div>
-        <div style={{ height: 8, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden' }}>
+        <div style={{ height: 8, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden' }} role="progressbar" aria-valuenow={game.wind} aria-valuemin={0} aria-valuemax={maxW} aria-label="Wind remaining">
           <div style={{ height: '100%', width: `${(game.wind / maxW) * 100}%`, background: game.wind > maxW * 0.3 ? 'var(--accent)' : 'var(--safe-red)', transition: 'width 0.2s' }} />
         </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 11, fontFamily: 'monospace', color: 'var(--dim)' }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 13, fontFamily: 'ui-monospace, monospace', color: 'var(--dim)' }}>
           {(Object.keys(species.stats) as StatKey[]).map(k => (
             <span key={k}>{STAT_ABBR[k]} {species.stats[k]}{traits.some(t => t.bonusStat === k) ? '+' : ''}</span>
           ))}
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto', display: 'flex', justifyContent: 'center' }}>
-        <div style={{ position: 'relative', width: containerW, height: containerH, flexShrink: 0 }}>
-          {world.flat().map(tile => {
-            const { left, top } = tilePos(tile.row, tile.col)
-            const biome = BIOMES[tile.biome]
-            const isHere = tile.row === game.row && tile.col === game.col
-            const isDiscovered = discoveredSet.has(`${tile.row},${tile.col}`)
-            const isAdjacent = Math.abs(tile.row - game.row) + Math.abs(tile.col - game.col) === 1
-            return (
-              <div key={`${tile.row},${tile.col}`}
-                onClick={() => isAdjacent && move(tile.row - game.row, tile.col - game.col)}
-                title={biome.label}
-                style={{
-                  position: 'absolute', left, top, width: TILE_W, height: TILE_H,
-                  clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-                  background: biome.color,
-                  opacity: isDiscovered ? 0.95 : 0.45,
-                  outline: isHere ? '2px solid white' : isAdjacent ? '1px solid rgba(255,255,255,0.6)' : 'none',
-                  outlineOffset: -2,
-                  cursor: isAdjacent ? 'pointer' : 'default',
-                }}
-              />
-            )
-          })}
-          <div style={{
-            position: 'absolute', left: birdPos.left + TILE_W / 2 - 12, top: birdPos.top + TILE_H / 2 - 14,
-            fontSize: 20, transition: 'left 0.2s, top 0.2s', pointerEvents: 'none', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.3))',
-          }}>{species.emoji}</div>
+      <div ref={wrapRef} style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ position: 'relative', width: CONTAINER_W * scale, height: CONTAINER_H * scale, flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: CONTAINER_W, height: CONTAINER_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+            {world.flat().map(tile => {
+              const { left, top } = tilePos(tile.row, tile.col)
+              const biome = BIOMES[tile.biome]
+              const key = `${tile.row},${tile.col}`
+              const isHere = tile.row === game.row && tile.col === game.col
+              const isDiscovered = discoveredSet.has(key)
+              const isAdjacent = Math.abs(tile.row - game.row) + Math.abs(tile.col - game.col) === 1
+              const isFlashing = flash?.key === key
+              const flashClass = isFlashing ? (flash!.tone === 'success' ? 'flyway-flash-success flyway-tile-pop' : 'flyway-flash-fail flyway-tile-pop') : ''
+              return (
+                <div key={key}
+                  className={flashClass}
+                  onClick={() => isAdjacent && move(tile.row - game.row, tile.col - game.col)}
+                  role={isAdjacent ? 'button' : undefined}
+                  aria-label={isAdjacent ? `Fly to ${biome.label}` : undefined}
+                  title={biome.label}
+                  style={{
+                    position: 'absolute', left, top, width: TILE_W, height: TILE_H,
+                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                    background: biome.color,
+                    opacity: isDiscovered ? 0.95 : 0.45,
+                    outline: isHere ? '2px solid white' : isAdjacent ? '1px solid rgba(255,255,255,0.6)' : 'none',
+                    outlineOffset: -2,
+                    cursor: isAdjacent ? 'pointer' : 'default',
+                  }}
+                />
+              )
+            })}
+            <div style={{
+              position: 'absolute', left: birdPos.left + TILE_W / 2 - 12, top: birdPos.top + TILE_H / 2 - 14,
+              fontSize: 20, transition: 'left 0.2s, top 0.2s', pointerEvents: 'none', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.3))',
+            }}>{species.emoji}</div>
+          </div>
         </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-        <button onClick={() => move(-1, 0)} style={dpadStyle}>▲</button>
+        <button onClick={() => move(-1, 0)} aria-label="Fly north" style={dpadStyle}>▲</button>
         <div style={{ display: 'flex', gap: 4 }}>
-          <button onClick={() => move(0, -1)} style={dpadStyle}>◀</button>
-          <button onClick={() => move(1, 0)} style={dpadStyle}>▼</button>
-          <button onClick={() => move(0, 1)} style={dpadStyle}>▶</button>
+          <button onClick={() => move(0, -1)} aria-label="Fly west" style={dpadStyle}>◀</button>
+          <button onClick={() => move(1, 0)} aria-label="Fly south" style={dpadStyle}>▼</button>
+          <button onClick={() => move(0, 1)} aria-label="Fly east" style={dpadStyle}>▶</button>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 4 }}>Arrow keys / WASD, or tap an adjacent tile</div>
+        <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4 }}>Arrow keys / WASD, or tap an adjacent tile</div>
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 }}>Flight log</div>
+        <div className="flyway-pixel" style={{ fontSize: 10, color: 'var(--dim)', marginBottom: 6 }}>FLIGHT LOG</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {game.log.length === 0 && <div style={{ fontSize: 12, color: 'var(--dim)' }}>Take off and see what you find.</div>}
+          {game.log.length === 0 && <div style={{ fontSize: 14, color: 'var(--dim)' }}>Take off and see what you find.</div>}
           {game.log.map(entry => (
-            <div key={entry.id} style={{ fontSize: 12, padding: '6px 10px', borderRadius: 10, background: 'var(--surface-2)', borderLeft: `3px solid ${entry.tone === 'success' ? 'var(--safe-green)' : entry.tone === 'fail' ? 'var(--safe-red)' : 'var(--dim)'}` }}>
+            <div key={entry.id} style={{ fontSize: 14, padding: '6px 10px', borderRadius: 10, background: 'var(--surface-2)', borderLeft: `3px solid ${entry.tone === 'success' ? 'var(--safe-green)' : entry.tone === 'fail' ? 'var(--safe-red)' : 'var(--dim)'}` }}>
               {entry.text}
             </div>
           ))}
         </div>
       </div>
+
+      {confirmingRelease && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={() => setConfirmingRelease(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} />
+          <div style={{ position: 'relative', width: '100%', maxWidth: 340, borderRadius: 16, border: '1px solid var(--border)', background: 'white', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Release {character.name}?</div>
+            <p style={{ fontSize: 14, color: 'var(--dim)', marginTop: 8 }}>This clears your saved bird and progress. You'll start a new character next time.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmingRelease(false)} style={{ padding: '8px 16px', borderRadius: 999, border: '1px solid var(--border)', background: 'white', fontSize: 14 }}>Cancel</button>
+              <button onClick={confirmRelease} style={{ padding: '8px 16px', borderRadius: 999, border: 'none', background: 'var(--safe-red)', color: 'white', fontSize: 14, fontWeight: 700 }}>Release</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 const dpadStyle: React.CSSProperties = {
-  width: 40, height: 40, borderRadius: 10, border: '1px solid var(--border)', background: 'white', fontSize: 14, cursor: 'pointer',
+  width: 44, height: 44, borderRadius: 10, border: '1px solid var(--border)', background: 'white', fontSize: 16, cursor: 'pointer',
 }
