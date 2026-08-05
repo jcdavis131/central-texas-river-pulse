@@ -133,12 +133,32 @@ export function latLonToCell(lat: number, lon: number): { row: number; col: numb
 
 export interface Tile { row: number; col: number; biome: BiomeId; poi?: string }
 
-interface RiverDef { name: string; biome: 'river' | 'spring'; points: [number, number][] } // [lat, lon]
+interface RiverDef { name: string; biome: 'river' | 'spring'; width?: number; points: [number, number][] } // [lat, lon]
 interface BlobDef { name: string; lat: number; lon: number; radius: number }
 
-// Real waypoints, approximate - a stylized game map, not a survey.
+// Cruising altitude for the whole flight - a hawk's typical soaring height.
+export const ALTITUDE_FT = 500
+
+// Cheap deterministic hash -> [0,1), stable per tile so terrain texture doesn't
+// flicker between renders (no Math.random - this has to be reproducible).
+export function hashNoise(row: number, col: number): number {
+  let h = (row * 374761393 + col * 668265263) ^ 0x9e3779b9
+  h = (h ^ (h >>> 13)) * 1274126177
+  h = h ^ (h >>> 16)
+  return ((h >>> 0) % 1000) / 1000
+}
+
+export function shadeHex(hex: string, amt: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  const clamp = (v: number) => Math.max(0, Math.min(255, v))
+  const r = clamp(((n >> 16) & 0xff) + amt), g = clamp(((n >> 8) & 0xff) + amt), b = clamp((n & 0xff) + amt)
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
+}
+
+// Real waypoints, approximate - a stylized game map, not a survey. Major rivers
+// get width:2 so they read as wider channels than creeks like the Comal or Cibolo.
 const RIVERS: RiverDef[] = [
-  { name: 'Colorado River', biome: 'river', points: [
+  { name: 'Colorado River', biome: 'river', width: 2, points: [
     [30.88, -98.42], [30.73, -98.37], [30.67, -98.42], [30.58, -98.27], [30.45, -97.95],
     [30.32, -97.82], [30.27, -97.74], [30.11, -97.31], [29.75, -96.65], [29.15, -96.15], [28.70, -95.90],
   ] },
@@ -148,18 +168,18 @@ const RIVERS: RiverDef[] = [
   { name: 'Pedernales River', biome: 'river', points: [
     [30.35, -98.90], [30.28, -98.87], [30.28, -98.41], [30.30, -98.25], [30.38, -97.98],
   ] },
-  { name: 'Guadalupe River', biome: 'spring', points: [
+  { name: 'Guadalupe River', biome: 'spring', width: 2, points: [
     [30.05, -99.35], [30.05, -99.14], [29.95, -98.70], [29.87, -98.20], [29.70, -98.13],
     [29.50, -97.45], [29.10, -97.00], [28.65, -96.80],
   ] },
   { name: 'Comal River', biome: 'spring', points: [[29.71, -98.14], [29.70, -98.12]] },
   { name: 'San Marcos River', biome: 'spring', points: [[29.89, -97.93], [29.70, -97.68], [29.50, -97.45]] },
-  { name: 'San Antonio River', biome: 'river', points: [
+  { name: 'San Antonio River', biome: 'river', width: 2, points: [
     [29.47, -98.47], [29.42, -98.49], [29.35, -98.47], [29.26, -98.32], [28.95, -97.85], [28.60, -97.15],
   ] },
   { name: 'Medina River', biome: 'river', points: [[29.72, -99.08], [29.35, -98.68], [29.18, -98.48], [29.26, -98.48]] },
   { name: 'Cibolo Creek', biome: 'river', points: [[29.59, -98.30], [29.00, -97.92]] },
-  { name: 'Brazos River', biome: 'river', points: [[30.10, -96.13], [29.58, -95.76], [29.30, -95.45]] },
+  { name: 'Brazos River', biome: 'river', width: 2, points: [[30.10, -96.13], [29.58, -95.76], [29.30, -95.45]] },
   { name: 'Lavaca-Navidad', biome: 'river', points: [[29.00, -96.60], [28.75, -96.30]] },
 ]
 
@@ -203,7 +223,7 @@ function paintBlob(grid: Tile[][], center: { row: number; col: number }, radius:
   }
 }
 
-function paintLine(grid: Tile[][], points: { row: number; col: number }[], biome: BiomeId, poi: string) {
+function paintLine(grid: Tile[][], points: { row: number; col: number }[], biome: BiomeId, poi: string, width = 1) {
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i], b = points[i + 1]
     const steps = Math.max(Math.abs(b.row - a.row), Math.abs(b.col - a.col), 1)
@@ -212,6 +232,12 @@ function paintLine(grid: Tile[][], points: { row: number; col: number }[], biome
       const row = clampIdx(Math.round(a.row + (b.row - a.row) * t))
       const col = clampIdx(Math.round(a.col + (b.col - a.col) * t))
       grid[row][col] = { row, col, biome, poi }
+      if (width > 1) {
+        // widen toward whichever neighbor is still open water-adjacent, not off into the background
+        const rr = clampIdx(row + 1), cc = clampIdx(col + 1)
+        if (!grid[rr][col].poi) grid[rr][col] = { row: rr, col, biome, poi }
+        if (!grid[row][cc].poi) grid[row][cc] = { row, col: cc, biome, poi }
+      }
     }
   }
 }
@@ -234,7 +260,7 @@ export function generateWorld(): Tile[][] {
   }
 
   for (const river of RIVERS) {
-    paintLine(grid, river.points.map(([lat, lon]) => latLonToCell(lat, lon)), river.biome, river.name)
+    paintLine(grid, river.points.map(([lat, lon]) => latLonToCell(lat, lon)), river.biome, river.name, river.width ?? 1)
   }
   for (const lake of LAKES) {
     paintBlob(grid, latLonToCell(lake.lat, lake.lon), lake.radius, 'lake', lake.name)

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  SPECIES, TRAITS, BIOMES, GRID_SIZE, START_POS,
-  generateWorld, maxWind, rollUnder, pick,
-  type Species, type Trait, type StatKey,
+  SPECIES, TRAITS, BIOMES, GRID_SIZE, START_POS, ALTITUDE_FT,
+  generateWorld, maxWind, rollUnder, pick, hashNoise, shadeHex,
+  type Species, type Trait, type StatKey, type BiomeId,
 } from '../lib/flyway'
 
 const CHAR_KEY = 'flyway-character-v1'
@@ -21,6 +21,29 @@ const VIEWPORT_H = 220
 
 function tilePos(row: number, col: number) {
   return { left: (col - row) * (TILE_W / 2) + OFFSET_X, top: (col + row) * (TILE_H / 2) }
+}
+
+const WATER_BIOMES: BiomeId[] = ['lake', 'river', 'spring']
+
+// Terrain look, not a flat color swatch: water gets a light-catching gradient,
+// hills get ridge-shadow shading, everything gets a whisper of per-tile noise
+// so the ground doesn't read as a grid of solid-color diamonds from 500ft up.
+function tileBackground(biomeId: BiomeId, color: string, row: number, col: number): string {
+  const noise = hashNoise(row, col)
+  const wobble = Math.round((noise - 0.5) * 18) // -9..+9
+  if (WATER_BIOMES.includes(biomeId)) {
+    const light = shadeHex(color, 28 + wobble), dark = shadeHex(color, -18 + wobble)
+    return `linear-gradient(135deg, ${light} 0%, ${color} 45%, ${dark} 100%)`
+  }
+  if (biomeId === 'hill') {
+    const light = shadeHex(color, 14 + wobble), dark = shadeHex(color, -22 + wobble)
+    return `linear-gradient(150deg, ${light} 0%, ${color} 55%, ${dark} 100%)`
+  }
+  if (biomeId === 'town') {
+    const line = shadeHex(color, -26)
+    return `repeating-linear-gradient(45deg, ${line} 0 2px, ${shadeHex(color, wobble)} 2px 9px)`
+  }
+  return shadeHex(color, wobble)
 }
 
 interface Character { speciesId: string; traitIds: string[]; name: string }
@@ -304,7 +327,7 @@ export function Flyway() {
                     style={{
                       position: 'absolute', left, top, width: TILE_W, height: TILE_H,
                       clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-                      background: biome.color,
+                      background: tileBackground(tile.biome, biome.color, tile.row, tile.col),
                       opacity: isDiscovered ? 0.95 : 0.45,
                       outline: isHere ? '2px solid white' : isAdjacent ? '1px solid rgba(255,255,255,0.6)' : 'none',
                       outlineOffset: -2,
@@ -313,16 +336,27 @@ export function Flyway() {
                   />
                 )
               })}
+              {/* shadow cast on the ground below - camera keeps this centered under the bird */}
+              <div style={{
+                position: 'absolute', left: birdPos.left + TILE_W / 2 - 10, top: birdPos.top + TILE_H / 2 - 2,
+                width: 20, height: 9, borderRadius: '50%', background: 'rgba(10,15,10,0.32)',
+                filter: 'blur(1.5px)', transition: 'left 0.2s, top 0.2s',
+              }} />
             </div>
+            {/* atmospheric haze - the ground gets softer toward the edges, like real height does */}
             <div style={{
-              position: 'absolute', left: VIEWPORT_W / 2 - 12, top: VIEWPORT_H / 2 - 14,
-              fontSize: 20, pointerEvents: 'none', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.3))',
+              position: 'absolute', inset: 0, pointerEvents: 'none',
+              background: 'radial-gradient(ellipse at center, transparent 45%, rgba(255,255,255,0.30) 100%)',
+            }} />
+            <div style={{
+              position: 'absolute', left: VIEWPORT_W / 2 - 11, top: VIEWPORT_H / 2 - 17,
+              fontSize: 18, pointerEvents: 'none', filter: 'drop-shadow(0 4px 3px rgba(0,0,0,0.35))',
             }}>{species.emoji}</div>
           </div>
         </div>
       </div>
       <div style={{ fontSize: 11, color: 'var(--dim)', textAlign: 'center' }}>
-        Currently over {world[game.row][game.col].poi ?? BIOMES[world[game.row][game.col].biome].label}
+        {ALTITUDE_FT} ft over {world[game.row][game.col].poi ?? BIOMES[world[game.row][game.col].biome].label}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
