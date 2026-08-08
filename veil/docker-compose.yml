@@ -1,0 +1,37 @@
+# Self-host Veil: server (API + optional inbound SMTP) and web client.
+#
+#   cp .env.example .env   # edit as needed
+#   docker compose up --build
+#
+# Web:  http://localhost:5180   (set the server URL to http://localhost:8787 in Settings)
+# API:  http://localhost:8787
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file: .env
+    environment:
+      # Container-internal defaults; override in .env.
+      PORT: 8787
+      VEIL_DB: /app/server/data/veil.db
+    ports:
+      - "8787:8787"
+      - "2525:2525" # inbound SMTP (only used when VEIL_SMTP_INBOUND=true)
+    volumes:
+      - veil-data:/app/server/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "5180:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  veil-data:

@@ -1,9 +1,9 @@
 # Veil server — Node 22 (built-in node:sqlite, no native build step).
 FROM node:22-alpine AS build
 WORKDIR /app
-# Install server deps in isolation using the server's own manifest.
+# Install server deps (including dev deps: tsc/tsx are needed to build).
 COPY server/package.json ./server/package.json
-RUN cd server && npm install --omit=dev=false
+RUN cd server && npm install --include=dev
 COPY server ./server
 RUN cd server && npm run build
 

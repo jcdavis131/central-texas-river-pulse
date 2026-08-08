@@ -1,0 +1,8 @@
+# Veil server runtime data (SQLite DB + WAL)
+server/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Local env
+.env
