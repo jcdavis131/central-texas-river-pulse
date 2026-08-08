@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useVault } from "./hooks/useVault";
+import { useServer } from "./hooks/useServer";
 import { Lock } from "./components/Lock";
 import { Dashboard } from "./components/Dashboard";
 import { Activity } from "./components/Activity";
@@ -9,6 +10,7 @@ type Tab = "identities" | "activity" | "settings";
 
 export default function App() {
   const vault = useVault();
+  const server = useServer();
   const [tab, setTab] = useState<Tab>("identities");
 
   if (vault.lockState === "loading") {
@@ -58,6 +60,7 @@ export default function App() {
         {tab === "identities" && (
           <Dashboard
             state={vault.state}
+            server={server}
             onCreate={vault.addIdentity}
             onStatus={vault.setIdentityStatus}
             onUpdate={vault.updateIdentity}
@@ -69,6 +72,7 @@ export default function App() {
         {tab === "settings" && (
           <Settings
             settings={vault.state.settings}
+            server={server}
             onUpdate={vault.updateSettings}
             onChangePassword={vault.changePassword}
             onDestroy={vault.destroy}

@@ -4,9 +4,11 @@ import { CreateIdentity } from "./CreateIdentity";
 import { IdentityDetail } from "./IdentityDetail";
 import type { Identity, Settings, VaultState } from "../lib/types";
 import type { ActivityKind } from "../lib/types";
+import type { ServerApi } from "../hooks/useServer";
 
 interface Props {
   state: VaultState;
+  server: ServerApi;
   onCreate: (identity: Identity) => Promise<void>;
   onStatus: (id: string, status: Identity["status"]) => Promise<void>;
   onUpdate: (id: string, patch: Partial<Identity>) => Promise<void>;
@@ -14,7 +16,7 @@ interface Props {
   log: (kind: ActivityKind, detail: string, identityId?: string) => Promise<void>;
 }
 
-export function Dashboard({ state, onCreate, onStatus, onUpdate, onRemove, log }: Props) {
+export function Dashboard({ state, server, onCreate, onStatus, onUpdate, onRemove, log }: Props) {
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -27,8 +29,25 @@ export function Dashboard({ state, onCreate, onStatus, onUpdate, onRemove, log }
   const selected = state.identities.find((i) => i.id === selectedId) ?? null;
 
   async function handleCreate(identity: Identity) {
-    await onCreate(identity);
-    await log("identity_created", `Created masked identity “${identity.label}”`, identity.id);
+    let toStore = identity;
+    // When connected to a server, register a real forwarding alias so mail to it
+    // actually reaches the configured inbox; use the server-issued address.
+    if (server.connected && state.settings.forwardEmail) {
+      try {
+        const address = await server.provisionEmailAlias(identity.label, state.settings.forwardEmail);
+        if (address) {
+          toStore = {
+            ...identity,
+            emailAlias: address,
+            secret: identity.secret ? { ...identity.secret, username: address } : identity.secret,
+          };
+        }
+      } catch {
+        /* fall back to the locally generated alias */
+      }
+    }
+    await onCreate(toStore);
+    await log("identity_created", `Created masked identity “${toStore.label}”`, toStore.id);
   }
 
   async function handleStatus(id: string, status: Identity["status"]) {
@@ -110,6 +129,7 @@ export function Dashboard({ state, onCreate, onStatus, onUpdate, onRemove, log }
       {selected && (
         <IdentityDetail
           identity={selected}
+          server={server}
           onClose={() => setSelectedId(null)}
           onStatus={(status) => handleStatus(selected.id, status)}
           onUpdate={(patch) => onUpdate(selected.id, patch)}

@@ -298,3 +298,18 @@ body {
   .app-header { flex-wrap: wrap; gap: 12px; }
   .tabs { order: 3; width: 100%; margin-left: 0; }
 }
+
+/* ---------- Breach + TOTP ---------- */
+.breach { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.breach-bad { color: var(--danger); font-size: 13px; font-weight: 600; }
+.breach-ok { color: var(--ok); font-size: 13px; font-weight: 600; }
+.totp-code { font-size: 18px; letter-spacing: 0.12em; }
+.totp-remaining {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  letter-spacing: 0;
+}
