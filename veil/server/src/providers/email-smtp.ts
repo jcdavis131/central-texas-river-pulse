@@ -58,4 +58,19 @@ export class SmtpForwarder implements EmailForwarder {
       },
     });
   }
+
+  async send(msg: { from: string; to: string; subject: string; text: string }): Promise<void> {
+    if (!this.transporter) {
+      console.log(`[email] would send from ${msg.from} to ${msg.to}: ${msg.subject}`);
+      return;
+    }
+    // Reply appears to come from the alias itself.
+    await this.transporter.sendMail({
+      from: msg.from,
+      to: msg.to,
+      subject: msg.subject,
+      text: msg.text,
+      headers: { "X-Veil-Sent-From-Alias": msg.from },
+    });
+  }
 }

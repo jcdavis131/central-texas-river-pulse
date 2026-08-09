@@ -246,5 +246,100 @@ export function createApp({ db, providers, config }: AppDeps): Hono<{ Variables:
     return c.json({ password: generatePassword(len) });
   });
 
+  // ---------- inbox (forwarded messages) ----------
+  app.get("/api/inbox", auth, (c) => {
+    const alias = c.req.query("alias");
+    return c.json({
+      messages: db.listMessages(c.get("user").id, alias),
+      unread: db.countUnread(c.get("user").id),
+    });
+  });
+
+  app.get("/api/inbox/:id", auth, (c) => {
+    const msg = db.getMessage(c.req.param("id"), c.get("user").id);
+    if (!msg) return c.json({ error: "not found" }, 404);
+    return c.json({ message: msg });
+  });
+
+  app.post("/api/inbox/:id/read", auth, async (c) => {
+    const { read } = await c.req.json().catch(() => ({ read: true }));
+    db.markMessageRead(c.req.param("id"), c.get("user").id, read === false ? 0 : 1);
+    return c.json({ ok: true });
+  });
+
+  app.delete("/api/inbox/:id", auth, (c) => {
+    db.deleteMessage(c.req.param("id"), c.get("user").id);
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/inbox/:id/reply", auth, async (c) => {
+    const user = c.get("user");
+    const msg = db.getMessage(c.req.param("id"), user.id);
+    if (!msg) return c.json({ error: "not found" }, 404);
+    const { body } = await c.req.json().catch(() => ({}));
+    if (typeof body !== "string" || !body.trim()) return c.json({ error: "body required" }, 400);
+    if (!providers.email.live) {
+      return c.json({ error: "email provider not configured — cannot send replies" }, 501);
+    }
+    try {
+      await providers.email.send({
+        from: msg.alias_address,
+        to: msg.from_addr,
+        subject: msg.subject.startsWith("Re:") ? msg.subject : `Re: ${msg.subject}`,
+        text: body,
+      });
+      logActivity(user.id, "email_replied", `Replied from ${msg.alias_address} to ${msg.from_addr}`);
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "reply failed" }, 502);
+    }
+  });
+
+  // ---------- cards ----------
+  app.get("/api/cards", auth, (c) => c.json({ cards: db.listCards(c.get("user").id) }));
+
+  app.post("/api/cards", auth, async (c) => {
+    const user = c.get("user");
+    const body = await c.req.json().catch(() => ({}));
+    const label = typeof body.label === "string" && body.label.trim() ? body.label.trim() : "Card";
+    const monthlyLimit = typeof body.monthlyLimit === "number" ? body.monthlyLimit : undefined;
+    try {
+      const card = await providers.card.issue({ label, monthlyLimit });
+      const row = {
+        id: randomId(),
+        user_id: user.id,
+        provider_id: card.id,
+        label,
+        last4: card.last4,
+        brand: card.brand,
+        exp_month: card.expMonth,
+        exp_year: card.expYear,
+        monthly_limit: monthlyLimit ?? null,
+        status: "active",
+        created_at: nowIso(),
+      };
+      db.addCard(row);
+      logActivity(user.id, "card_issued", `Issued card “${label}” (••${card.last4})`);
+      // number/cvc are only returned once (dormant/test provider) and never stored.
+      return c.json({ card: row, secret: card.number ? { number: card.number, cvc: card.cvc } : null, live: providers.card.live }, 201);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "card issue failed" }, 502);
+    }
+  });
+
+  app.post("/api/cards/:id/freeze", auth, async (c) => {
+    const user = c.get("user");
+    const card = db.getCard(c.req.param("id"), user.id);
+    if (!card) return c.json({ error: "not found" }, 404);
+    try {
+      await providers.card.freeze(card.provider_id);
+    } catch {
+      /* dormant provider is a no-op */
+    }
+    db.setCardStatus(card.id, user.id, "frozen");
+    logActivity(user.id, "card_issued", `Froze card “${card.label}”`);
+    return c.json({ ok: true });
+  });
+
   return app;
 }

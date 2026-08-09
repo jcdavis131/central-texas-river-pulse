@@ -5,14 +5,18 @@ import type { EmailForwarder } from "../providers/types.js";
 
 function capturingForwarder() {
   const calls: Array<{ from: string; to: string; destination: string; subject: string }> = [];
+  const sent: Array<{ from: string; to: string; subject: string; text: string }> = [];
   const fwd: EmailForwarder = {
     kind: "email",
     live: true,
     async forward(msg) {
       calls.push({ from: msg.from, to: msg.to, destination: msg.destination, subject: msg.subject });
     },
+    async send(msg) {
+      sent.push(msg);
+    },
   };
-  return { fwd, calls };
+  return { fwd, calls, sent };
 }
 
 function seedUserWithAlias(db: Db, address: string, status: "active" | "paused" = "active") {
@@ -62,6 +66,14 @@ describe("routeMessage", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].destination).toBe("real@me.com");
     expect(calls[0].subject).toBe("Order #5");
+
+    // The message is also stored for the in-app inbox.
+    const inbox = db.listMessages("u1");
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0].subject).toBe("Order #5");
+    expect(inbox[0].from_addr).toBe("store@shop.com");
+    expect(inbox[0].read).toBe(0);
+    expect(inbox[0].body).toContain("thanks");
   });
 
   it("does not forward for a paused alias", async () => {

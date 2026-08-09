@@ -63,6 +63,32 @@ export interface ActivityRow {
   detail: string;
 }
 
+/** A message received at an alias and forwarded — kept so the user can read it in-app. */
+export interface MessageRow {
+  id: string;
+  user_id: string;
+  alias_address: string;
+  from_addr: string;
+  subject: string;
+  body: string;
+  received_at: string;
+  read: number; // 0 | 1
+}
+
+export interface CardRow {
+  id: string;
+  user_id: string;
+  provider_id: string; // id from the issuer (or a test id)
+  label: string;
+  last4: string;
+  brand: string;
+  exp_month: number;
+  exp_year: number;
+  monthly_limit: number | null;
+  status: string; // active | frozen
+  created_at: string;
+}
+
 export class Db {
   private db: DatabaseSyncType;
 
@@ -115,6 +141,31 @@ export class Db {
         detail TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_activity_user ON activity(user_id);
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        alias_address TEXT NOT NULL,
+        from_addr TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id);
+      CREATE TABLE IF NOT EXISTS cards (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        last4 TEXT NOT NULL,
+        brand TEXT NOT NULL,
+        exp_month INTEGER NOT NULL,
+        exp_year INTEGER NOT NULL,
+        monthly_limit INTEGER,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id);
     `);
   }
 
@@ -229,6 +280,97 @@ export class Db {
     return this.db
       .prepare("SELECT * FROM activity WHERE user_id = ? ORDER BY at DESC LIMIT ?")
       .all(userId, limit) as unknown as ActivityRow[];
+  }
+
+  // ---- messages (inbox) ----
+  addMessage(row: MessageRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO messages (id, user_id, alias_address, from_addr, subject, body, received_at, read)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        row.id,
+        row.user_id,
+        row.alias_address,
+        row.from_addr,
+        row.subject,
+        row.body,
+        row.received_at,
+        row.read,
+      );
+  }
+
+  listMessages(userId: string, aliasAddress?: string, limit = 200): MessageRow[] {
+    if (aliasAddress) {
+      return this.db
+        .prepare(
+          "SELECT * FROM messages WHERE user_id = ? AND alias_address = ? ORDER BY received_at DESC LIMIT ?",
+        )
+        .all(userId, aliasAddress, limit) as unknown as MessageRow[];
+    }
+    return this.db
+      .prepare("SELECT * FROM messages WHERE user_id = ? ORDER BY received_at DESC LIMIT ?")
+      .all(userId, limit) as unknown as MessageRow[];
+  }
+
+  getMessage(id: string, userId: string): MessageRow | undefined {
+    return this.db.prepare("SELECT * FROM messages WHERE id = ? AND user_id = ?").get(id, userId) as
+      | MessageRow
+      | undefined;
+  }
+
+  markMessageRead(id: string, userId: string, read = 1): void {
+    this.db.prepare("UPDATE messages SET read = ? WHERE id = ? AND user_id = ?").run(read, id, userId);
+  }
+
+  deleteMessage(id: string, userId: string): void {
+    this.db.prepare("DELETE FROM messages WHERE id = ? AND user_id = ?").run(id, userId);
+  }
+
+  countUnread(userId: string): number {
+    const r = this.db
+      .prepare("SELECT COUNT(*) AS n FROM messages WHERE user_id = ? AND read = 0")
+      .get(userId) as { n: number } | undefined;
+    return r?.n ?? 0;
+  }
+
+  // ---- cards ----
+  addCard(row: CardRow): void {
+    this.db
+      .prepare(
+        `INSERT INTO cards (id, user_id, provider_id, label, last4, brand, exp_month, exp_year, monthly_limit, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        row.id,
+        row.user_id,
+        row.provider_id,
+        row.label,
+        row.last4,
+        row.brand,
+        row.exp_month,
+        row.exp_year,
+        row.monthly_limit,
+        row.status,
+        row.created_at,
+      );
+  }
+
+  listCards(userId: string): CardRow[] {
+    return this.db
+      .prepare("SELECT * FROM cards WHERE user_id = ? ORDER BY created_at DESC")
+      .all(userId) as unknown as CardRow[];
+  }
+
+  getCard(id: string, userId: string): CardRow | undefined {
+    return this.db.prepare("SELECT * FROM cards WHERE id = ? AND user_id = ?").get(id, userId) as
+      | CardRow
+      | undefined;
+  }
+
+  setCardStatus(id: string, userId: string, status: string): void {
+    this.db.prepare("UPDATE cards SET status = ? WHERE id = ? AND user_id = ?").run(status, id, userId);
   }
 
   close(): void {

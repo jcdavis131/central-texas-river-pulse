@@ -1,6 +1,7 @@
 import { SMTPServer, type SMTPServerOptions } from "smtp-server";
 import type { Db } from "../db.js";
 import type { EmailForwarder } from "../providers/types.js";
+import { randomId } from "../util.js";
 
 /** Extract the Subject header from a raw RFC822 message (best-effort). */
 export function parseSubject(raw: string): string {
@@ -10,6 +11,13 @@ export function parseSubject(raw: string): string {
   const unfolded = headerBlock.replace(/\r\n[ \t]+/g, " ");
   const m = unfolded.match(/^Subject:\s*(.*)$/im);
   return m ? m[1].trim() : "(no subject)";
+}
+
+/** Extract the body (everything after the header/body separator), capped for storage. */
+export function parseBody(raw: string): string {
+  const sep = raw.indexOf("\r\n\r\n");
+  const body = sep === -1 ? raw : raw.slice(sep + 4);
+  return body.slice(0, 20_000);
 }
 
 export interface ForwardOutcome {
@@ -48,6 +56,17 @@ export async function routeMessage(
       destination: alias.destination,
       subject,
       raw: msg.raw,
+    });
+    // Keep a copy so the user can read it in the in-app inbox.
+    db.addMessage({
+      id: randomId(),
+      user_id: alias.user_id,
+      alias_address: address,
+      from_addr: msg.from,
+      subject,
+      body: parseBody(msg.raw),
+      received_at: new Date().toISOString(),
+      read: 0,
     });
     onActivity?.(alias.user_id, `Forwarded "${subject}" from ${msg.from} via ${address}`);
     outcomes.push({ alias: address, delivered: true });

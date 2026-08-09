@@ -128,3 +128,75 @@ describe("HTTP API", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("inbox & cards", () => {
+  function makeAppWithDb() {
+    const config = loadConfig({ VEIL_ALIAS_DOMAIN: "relay.test", PORT: "0" } as NodeJS.ProcessEnv);
+    const db = new Db(":memory:");
+    const providers = buildProviders(config);
+    return { app: createApp({ db, providers, config }), db };
+  }
+
+  async function registerOn(app: Hono<any>) {
+    const res = await app.request("/api/auth/register", json({ email: "u@example.com", password: "supersecret" }));
+    return ((await res.json()) as any).token as string;
+  }
+
+  it("lists forwarded messages and marks them read", async () => {
+    const { app, db } = makeAppWithDb();
+    const token = await registerOn(app);
+    const me = (await (await app.request("/api/auth/me", { headers: { authorization: `Bearer ${token}` } })).json()) as any;
+
+    db.addMessage({
+      id: "m1",
+      user_id: me.user.id,
+      alias_address: "shop.ab12@relay.test",
+      from_addr: "store@shop.com",
+      subject: "Receipt #9",
+      body: "thanks for your order",
+      received_at: new Date().toISOString(),
+      read: 0,
+    });
+
+    const list = (await (await app.request("/api/inbox", { headers: { authorization: `Bearer ${token}` } })).json()) as any;
+    expect(list.messages).toHaveLength(1);
+    expect(list.unread).toBe(1);
+    expect(list.messages[0].subject).toBe("Receipt #9");
+
+    await app.request("/api/inbox/m1/read", json({ read: true }, token));
+    const after = (await (await app.request("/api/inbox", { headers: { authorization: `Bearer ${token}` } })).json()) as any;
+    expect(after.unread).toBe(0);
+  });
+
+  it("refuses to reply when the email provider is dormant", async () => {
+    const { app, db } = makeAppWithDb();
+    const token = await registerOn(app);
+    const me = (await (await app.request("/api/auth/me", { headers: { authorization: `Bearer ${token}` } })).json()) as any;
+    db.addMessage({
+      id: "m2", user_id: me.user.id, alias_address: "a@relay.test", from_addr: "x@y.com",
+      subject: "hi", body: "hello", received_at: new Date().toISOString(), read: 0,
+    });
+    const res = await app.request("/api/inbox/m2/reply", json({ body: "hey back" }, token));
+    expect(res.status).toBe(501);
+  });
+
+  it("issues, lists, and freezes a masked card (dormant test token)", async () => {
+    const { app } = makeAppWithDb();
+    const token = await registerOn(app);
+
+    const create = await app.request("/api/cards", json({ label: "Streaming", monthlyLimit: 25 }, token));
+    expect(create.status).toBe(201);
+    const out = (await create.json()) as any;
+    expect(out.card.last4).toHaveLength(4);
+    expect(out.card.monthly_limit).toBe(25);
+    expect(out.secret.number).toBeTruthy(); // dormant provider returns a test PAN once
+    const id = out.card.id;
+
+    const list = (await (await app.request("/api/cards", { headers: { authorization: `Bearer ${token}` } })).json()) as any;
+    expect(list.cards).toHaveLength(1);
+
+    await app.request(`/api/cards/${id}/freeze`, json({}, token));
+    const after = (await (await app.request("/api/cards", { headers: { authorization: `Bearer ${token}` } })).json()) as any;
+    expect(after.cards[0].status).toBe("frozen");
+  });
+});

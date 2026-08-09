@@ -20,6 +20,8 @@ export interface EmailForwarder {
     subject: string;
     raw: Buffer | string;
   }): Promise<void>;
+  /** Send a new message from an alias (used for reply-from-alias). */
+  send(msg: { from: string; to: string; subject: string; text: string }): Promise<void>;
 }
 
 export interface PhoneProvider {
