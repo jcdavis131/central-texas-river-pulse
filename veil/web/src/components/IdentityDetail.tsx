@@ -29,6 +29,14 @@ export function IdentityDetail({ identity, server, onClose, onStatus, onUpdate, 
       <div className="detail-head">
         <Dot color={identity.color} />
         <StatusBadge status={identity.status} />
+        <button
+          className={"fav-star" + (identity.favorite ? " on" : "")}
+          onClick={() => onUpdate({ favorite: !identity.favorite })}
+          title={identity.favorite ? "Unpin" : "Pin to top"}
+          aria-label="Toggle favorite"
+        >
+          {identity.favorite ? "★" : "☆"}
+        </button>
         <span className="detail-created">
           created {new Date(identity.createdAt).toLocaleDateString()}
         </span>
@@ -39,6 +47,8 @@ export function IdentityDetail({ identity, server, onClose, onStatus, onUpdate, 
         <Field label="Email alias" value={identity.emailAlias} mono copy />
         {identity.phoneAlias && <Field label="Phone alias" value={identity.phoneAlias} mono copy />}
       </section>
+
+      <DetailsEditor identity={identity} onUpdate={onUpdate} />
 
       {secret && (
         <section className="detail-section">
@@ -225,6 +235,79 @@ function TotpSection({
       ) : (
         <button className="btn" onClick={() => setAdding(true)}>+ Add TOTP secret</button>
       )}
+    </section>
+  );
+}
+
+function DetailsEditor({
+  identity,
+  onUpdate,
+}: {
+  identity: Identity;
+  onUpdate: (patch: Partial<Identity>) => void;
+}) {
+  const [url, setUrl] = useState(identity.url ?? "");
+  const [notes, setNotes] = useState(identity.notes ?? "");
+  const [tagInput, setTagInput] = useState("");
+  const tags = identity.tags ?? [];
+
+  function addTag() {
+    const t = tagInput.trim().toLowerCase();
+    if (!t || tags.includes(t)) return setTagInput("");
+    onUpdate({ tags: [...tags, t] });
+    setTagInput("");
+  }
+
+  function removeTag(t: string) {
+    onUpdate({ tags: tags.filter((x) => x !== t) });
+  }
+
+  return (
+    <section className="detail-section">
+      <h3>Details</h3>
+
+      <label className="input-label">Website</label>
+      <input
+        className="input"
+        type="url"
+        placeholder="https://example.com"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onBlur={() => url !== (identity.url ?? "") && onUpdate({ url: url.trim() || undefined })}
+      />
+
+      <label className="input-label">Tags</label>
+      <div className="tag-editor">
+        {tags.map((t) => (
+          <span key={t} className="tag">
+            {t}
+            <button className="tag-x" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}>×</button>
+          </span>
+        ))}
+        <input
+          className="tag-input"
+          placeholder="add tag…"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              addTag();
+            }
+          }}
+          onBlur={addTag}
+        />
+      </div>
+
+      <label className="input-label">Notes</label>
+      <textarea
+        className="input textarea"
+        rows={3}
+        placeholder="Anything worth remembering…"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        onBlur={() => notes !== (identity.notes ?? "") && onUpdate({ notes: notes.trim() || undefined })}
+      />
     </section>
   );
 }

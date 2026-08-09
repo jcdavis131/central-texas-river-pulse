@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Dot, StatusBadge } from "./ui";
 import { CreateIdentity } from "./CreateIdentity";
 import { IdentityDetail } from "./IdentityDetail";
-import type { Identity, Settings, VaultState } from "../lib/types";
-import type { ActivityKind } from "../lib/types";
+import type { Identity, Settings, VaultState, ActivityKind } from "../lib/types";
 import type { ServerApi } from "../hooks/useServer";
+
+type Sort = "recent" | "name" | "status";
 
 interface Props {
   state: VaultState;
@@ -20,18 +21,42 @@ export function Dashboard({ state, server, onCreate, onStatus, onUpdate, onRemov
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<Sort>("recent");
+  const [tag, setTag] = useState<string | null>(null);
 
   const settings: Settings = state.settings;
-  const identities = state.identities.filter((i) =>
-    i.label.toLowerCase().includes(query.toLowerCase()),
-  );
   const active = state.identities.filter((i) => i.status === "active").length;
   const selected = state.identities.find((i) => i.id === selectedId) ?? null;
 
+  const allTags = useMemo(() => {
+    const s = new Set<string>();
+    state.identities.forEach((i) => (i.tags ?? []).forEach((t) => s.add(t)));
+    return Array.from(s).sort();
+  }, [state.identities]);
+
+  const shown = useMemo(() => {
+    const q = query.toLowerCase();
+    const matches = (i: Identity) =>
+      (!tag || (i.tags ?? []).includes(tag)) &&
+      (!q ||
+        i.label.toLowerCase().includes(q) ||
+        i.emailAlias.toLowerCase().includes(q) ||
+        (i.url ?? "").toLowerCase().includes(q) ||
+        (i.tags ?? []).some((t) => t.includes(q)) ||
+        `${i.persona.firstName} ${i.persona.lastName}`.toLowerCase().includes(q));
+
+    const list = state.identities.filter(matches);
+    const cmp: Record<Sort, (a: Identity, b: Identity) => number> = {
+      recent: (a, b) => b.createdAt.localeCompare(a.createdAt),
+      name: (a, b) => a.label.localeCompare(b.label),
+      status: (a, b) => a.status.localeCompare(b.status),
+    };
+    // Favorites always pinned to the top, then the chosen sort.
+    return list.sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite) || cmp[sort](a, b));
+  }, [state.identities, query, tag, sort]);
+
   async function handleCreate(identity: Identity) {
     let toStore = identity;
-    // When connected to a server, register a real forwarding alias so mail to it
-    // actually reaches the configured inbox; use the server-issued address.
     if (server.connected && state.settings.forwardEmail) {
       try {
         const address = await server.provisionEmailAlias(identity.label, state.settings.forwardEmail);
@@ -53,11 +78,7 @@ export function Dashboard({ state, server, onCreate, onStatus, onUpdate, onRemov
   async function handleStatus(id: string, status: Identity["status"]) {
     await onStatus(id, status);
     const kind: ActivityKind =
-      status === "revoked"
-        ? "identity_revoked"
-        : status === "paused"
-          ? "identity_paused"
-          : "identity_resumed";
+      status === "revoked" ? "identity_revoked" : status === "paused" ? "identity_paused" : "identity_resumed";
     const label = state.identities.find((i) => i.id === id)?.label ?? "identity";
     await log(kind, `${status[0].toUpperCase()}${status.slice(1)} “${label}”`, id);
   }
@@ -82,30 +103,60 @@ export function Dashboard({ state, server, onCreate, onStatus, onUpdate, onRemov
       <div className="toolbar">
         <input
           className="input search"
-          placeholder="Search identities…"
+          placeholder="Search name, alias, tag…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
-          + New identity
-        </button>
+        <select className="input select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort">
+          <option value="recent">Newest</option>
+          <option value="name">Name A–Z</option>
+          <option value="status">Status</option>
+        </select>
+        <button className="btn btn-primary" onClick={() => setCreating(true)}>+ New identity</button>
       </div>
 
-      {identities.length === 0 ? (
+      {allTags.length > 0 && (
+        <div className="tag-filter">
+          <button className={"chip" + (tag === null ? " on" : "")} onClick={() => setTag(null)}>All</button>
+          {allTags.map((t) => (
+            <button key={t} className={"chip" + (tag === t ? " on" : "")} onClick={() => setTag(t)}>
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {state.identities.length === 0 ? (
         <div className="empty">
-          <p>No identities yet.</p>
+          <span className="empty-emoji">🕶️</span>
+          <h3>No identities yet</h3>
           <p className="hint">
-            Create a masked identity for each service you sign up for — a unique
-            email, phone, persona, and password that shields your real details.
+            Create a masked identity for each service you sign up for — a unique email, phone,
+            persona, and password that shields your real details.
           </p>
+          <button className="btn btn-primary" onClick={() => setCreating(true)} style={{ marginTop: 16 }}>
+            Create your first identity
+          </button>
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="empty">
+          <span className="empty-emoji">🔍</span>
+          <h3>No matches</h3>
+          <p className="hint">Nothing matches your search or tag filter.</p>
         </div>
       ) : (
         <div className="identity-grid">
-          {identities.map((i) => (
-            <button key={i.id} className="identity-card" onClick={() => setSelectedId(i.id)}>
+          {shown.map((i) => (
+            <button
+              key={i.id}
+              className="identity-card"
+              style={{ ["--card-accent" as any]: i.color }}
+              onClick={() => setSelectedId(i.id)}
+            >
               <div className="identity-card-head">
                 <Dot color={i.color} />
                 <span className="identity-label">{i.label}</span>
+                {i.favorite && <span className="card-fav" title="Favorite">★</span>}
                 <StatusBadge status={i.status} />
               </div>
               <div className="identity-alias mono">{i.emailAlias}</div>
@@ -113,6 +164,11 @@ export function Dashboard({ state, server, onCreate, onStatus, onUpdate, onRemov
               <div className="identity-persona dim">
                 {i.persona.firstName} {i.persona.lastName} · {i.persona.city}, {i.persona.state}
               </div>
+              {i.tags && i.tags.length > 0 && (
+                <div className="card-tags">
+                  {i.tags.map((t) => <span key={t} className="tag mini">#{t}</span>)}
+                </div>
+              )}
             </button>
           ))}
         </div>

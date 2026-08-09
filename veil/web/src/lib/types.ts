@@ -44,7 +44,17 @@ export interface Identity {
   secret?: Secret;
   card?: Card;
   color: string;
+  /** Website this identity is used on. */
+  url?: string;
+  /** Free-form notes. */
+  notes?: string;
+  /** User-defined tags for grouping/filtering. */
+  tags?: string[];
+  /** Pinned to the top of the dashboard. */
+  favorite?: boolean;
 }
+
+export type ThemePref = "system" | "light" | "dark";
 
 export type ActivityKind =
   | "identity_created"
@@ -67,6 +77,7 @@ export interface ActivityEvent {
 export interface Settings {
   forwardEmail: string; // the real inbox aliases forward to
   forwardPhone: string; // the real number calls/texts relay to
+  autoLockMinutes?: number; // lock the vault after N idle minutes (0 = never)
 }
 
 /** The full decrypted vault. Everything here is sealed at rest. */
@@ -80,7 +91,7 @@ export interface VaultState {
 export function emptyVault(): VaultState {
   return {
     version: 1,
-    settings: { forwardEmail: "", forwardPhone: "" },
+    settings: { forwardEmail: "", forwardPhone: "", autoLockMinutes: 15 },
     identities: [],
     activity: [],
   };

@@ -51,6 +51,25 @@ export function Settings({ settings, server, onUpdate, onChangePassword, onDestr
 
   return (
     <div className="settings">
+      <section className="settings-section">
+        <h3>Security</h3>
+        <p className="hint">Automatically lock the vault after a period of inactivity.</p>
+        <label className="input-label">Auto-lock</label>
+        <select
+          className="input select"
+          value={String(settings.autoLockMinutes ?? 15)}
+          onChange={(e) => onUpdate({ autoLockMinutes: Number(e.target.value) })}
+        >
+          <option value="0">Never</option>
+          <option value="1">After 1 minute</option>
+          <option value="5">After 5 minutes</option>
+          <option value="15">After 15 minutes</option>
+          <option value="30">After 30 minutes</option>
+          <option value="60">After 1 hour</option>
+        </select>
+        <p className="hint">Theme (light / dark / system) is the ☀️/🌙/🖥 button in the top bar.</p>
+      </section>
+
       <ServerSync server={server} />
 
       <section className="settings-section">

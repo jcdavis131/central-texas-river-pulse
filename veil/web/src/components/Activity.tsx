@@ -15,8 +15,9 @@ export function Activity({ state }: { state: VaultState }) {
   if (state.activity.length === 0) {
     return (
       <div className="empty">
-        <p>No activity yet.</p>
-        <p className="hint">Actions you take — creating, pausing, revoking identities — appear here.</p>
+        <span className="empty-emoji">🍃</span>
+        <h3>Nothing here yet</h3>
+        <p className="hint">Actions you take — creating, pausing, or revoking identities — will show up here.</p>
       </div>
     );
   }
