@@ -14,7 +14,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("identities");
 
   if (vault.lockState === "loading") {
-    return <div className="lock-screen" />;
+    return <div className="landing" />;
   }
 
   if (vault.lockState !== "unlocked") {
