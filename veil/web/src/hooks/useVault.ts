@@ -17,8 +17,14 @@ export interface VaultApi {
   state: VaultState;
   error: string | null;
 
+  /** One-time recovery key to surface after create/upgrade; null once dismissed. */
+  recoveryKey: string | null;
+  dismissRecoveryKey(): void;
+
   initialize(password: string): Promise<void>;
   unlock(password: string): Promise<boolean>;
+  /** Recover with the recovery key, setting a new master password. */
+  recover(recoveryKey: string, newPassword: string): Promise<boolean>;
   lock(): void;
 
   addIdentity(identity: Identity): Promise<void>;
@@ -37,6 +43,7 @@ export function useVault(): VaultApi {
   const [lockState, setLockState] = useState<LockState>("loading");
   const [state, setState] = useState<VaultState>(emptyVault());
   const [error, setError] = useState<string | null>(null);
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const keyRef = useRef<CryptoKey | null>(null);
 
   useEffect(() => {
@@ -51,7 +58,9 @@ export function useVault(): VaultApi {
 
   const initialize = useCallback(async (password: string) => {
     setError(null);
-    keyRef.current = await store.initialize(password);
+    const res = await store.initialize(password);
+    keyRef.current = res.key;
+    setRecoveryKey(res.recoveryKey);
     setState(emptyVault());
     setLockState("unlocked");
   }, []);
@@ -64,10 +73,26 @@ export function useVault(): VaultApi {
       return false;
     }
     keyRef.current = res.key;
+    if (res.migratedRecoveryKey) setRecoveryKey(res.migratedRecoveryKey);
     setState(res.state);
     setLockState("unlocked");
     return true;
   }, []);
+
+  const recover = useCallback(async (rk: string, newPassword: string) => {
+    setError(null);
+    const res = await store.recover(rk, newPassword);
+    if (!res) {
+      setError("That recovery key didn’t match this vault.");
+      return false;
+    }
+    keyRef.current = res.key;
+    setState(res.state);
+    setLockState("unlocked");
+    return true;
+  }, []);
+
+  const dismissRecoveryKey = useCallback(() => setRecoveryKey(null), []);
 
   const lock = useCallback(() => {
     keyRef.current = null;
@@ -152,8 +177,11 @@ export function useVault(): VaultApi {
       lockState,
       state,
       error,
+      recoveryKey,
+      dismissRecoveryKey,
       initialize,
       unlock,
+      recover,
       lock,
       addIdentity,
       updateIdentity,
@@ -165,8 +193,9 @@ export function useVault(): VaultApi {
       destroy,
     }),
     [
-      lockState, state, error, initialize, unlock, lock, addIdentity, updateIdentity,
-      setIdentityStatus, removeIdentity, updateSettings, log, changePassword, destroy,
+      lockState, state, error, recoveryKey, dismissRecoveryKey, initialize, unlock, recover,
+      lock, addIdentity, updateIdentity, setIdentityStatus, removeIdentity, updateSettings,
+      log, changePassword, destroy,
     ],
   );
 }

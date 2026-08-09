@@ -11,9 +11,15 @@ is reverse-engineered from any commercial product — you own the whole stack.
 
 ## Highlights
 
-- **Zero-knowledge vault** — AES-GCM encryption with a key derived from your
-  master password via PBKDF2 (210k iterations). The password and key never leave
-  your device; the server only ever stores ciphertext.
+- **Zero-knowledge vault (envelope encryption)** — a random 256-bit vault key
+  encrypts everything with AES-256-GCM; that key is itself wrapped by a
+  key derived from your master password via PBKDF2-HMAC-SHA256 (210k iterations,
+  256-bit salt). The password and keys never leave your device; the server only
+  ever stores ciphertext.
+- **Recovery key** — a one-time 256-bit recovery key is issued when you create
+  your vault. It wraps a second copy of the vault key, so a forgotten master
+  password can be reset without data loss. Lose *both* and the data is gone by
+  design.
 - **Masked email aliases with real forwarding** — a built-in SMTP engine
   receives mail for your alias domain and forwards it to your real inbox
   (`Reply-To` preserved), so replies work transparently.
@@ -26,8 +32,8 @@ is reverse-engineered from any commercial product — you own the whole stack.
 - **Breach monitoring** — checks passwords against HaveIBeenPwned using
   k-anonymity (only a 5-char hash prefix is ever sent).
 - **Encrypted multi-device sync** — optional; only the encrypted blob is synced.
-- **Identity lifecycle & activity log** — pause / resume / revoke / rotate /
-  delete, all recorded locally.
+- **Identity lifecycle & activity log** — active / paused / muted / revoked
+  states plus delete, all recorded locally.
 - **Runs local-only or server-backed** — the web app works entirely offline;
   connect a server only when you want forwarding, sync, or breach checks.
 
@@ -91,8 +97,20 @@ npm run build
 
 ## Security
 
-- Zero-knowledge by construction: lose the master password and the vault is
+- Zero-knowledge by construction: the vault key is wrapped by your master
+  password and by a one-time recovery key. Lose **both** and the vault is
   unrecoverable — that's the point.
 - Server auth uses scrypt-hashed passwords and random session tokens.
 - This is a reference implementation; have a professional review the crypto and
   threat model before relying on it for high-risk use.
+
+## Specification alignment
+
+Veil is modelled on a broader platform specification. Because this is a free,
+open-source, self-hosted build, it implements the *software* faithfully and
+**does not claim** the parts that are commercial or legal offerings
+(compliance certifications, identity-theft insurance, a staffed data-broker
+removal service, a hosted VPN, or paid tiers). See
+[`docs/SPEC-ALIGNMENT.md`](docs/SPEC-ALIGNMENT.md) for a line-by-line map of
+what's implemented, what's provider-gated, what's on the roadmap, and what's
+intentionally out of scope.

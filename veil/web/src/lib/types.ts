@@ -1,4 +1,13 @@
-export type IdentityStatus = "active" | "paused" | "revoked";
+/**
+ * Per-identity lifecycle (spec §3.1 "Stateful Controls").
+ * - active:  forwarding on
+ * - paused:  forwarding temporarily halted, easily resumed
+ * - muted:   delivered but silenced (no notifications) — mail still stored
+ * - revoked: permanently killed; mail to it is rejected, kept for the record
+ */
+export type IdentityStatus = "active" | "paused" | "muted" | "revoked";
+
+export const IDENTITY_STATUSES: IdentityStatus[] = ["active", "paused", "muted", "revoked"];
 
 /** A generated persona — fake but internally consistent PII for a signup. */
 export interface Persona {
@@ -60,11 +69,14 @@ export type ActivityKind =
   | "identity_created"
   | "identity_paused"
   | "identity_resumed"
+  | "identity_muted"
   | "identity_revoked"
   | "email_forwarded"
   | "call_screened"
   | "secret_updated"
-  | "card_issued";
+  | "card_issued"
+  | "vault_recovered"
+  | "password_changed";
 
 export interface ActivityEvent {
   id: string;

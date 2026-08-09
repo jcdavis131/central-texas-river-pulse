@@ -44,7 +44,7 @@ export function Field({
   );
 }
 
-export function StatusBadge({ status }: { status: "active" | "paused" | "revoked" }) {
+export function StatusBadge({ status }: { status: "active" | "paused" | "muted" | "revoked" }) {
   return <span className={`badge badge-${status}`}>{status}</span>;
 }
 

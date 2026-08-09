@@ -78,7 +78,13 @@ export function Dashboard({ state, server, onCreate, onStatus, onUpdate, onRemov
   async function handleStatus(id: string, status: Identity["status"]) {
     await onStatus(id, status);
     const kind: ActivityKind =
-      status === "revoked" ? "identity_revoked" : status === "paused" ? "identity_paused" : "identity_resumed";
+      status === "revoked"
+        ? "identity_revoked"
+        : status === "paused"
+          ? "identity_paused"
+          : status === "muted"
+            ? "identity_muted"
+            : "identity_resumed";
     const label = state.identities.find((i) => i.id === id)?.label ?? "identity";
     await log(kind, `${status[0].toUpperCase()}${status.slice(1)} “${label}”`, id);
   }

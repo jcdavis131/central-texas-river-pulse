@@ -1,16 +1,20 @@
 /**
- * Zero-knowledge vault cryptography.
+ * Zero-knowledge vault cryptography (envelope model — spec §4.1, §4.4).
  *
- * The master password never leaves the device and is never stored. A symmetric
- * key is derived from it with PBKDF2 and used for AES-GCM. Only ciphertext,
- * the KDF salt, and KDF parameters are persisted — an attacker with full access
- * to the stored blob learns nothing without the master password.
+ * The master password never leaves the device and is never stored. A random
+ * 256-bit Vault Encryption Key (VEK) encrypts all vault data with AES-256-GCM.
+ * The VEK itself is wrapped (encrypted) by two independently derived key-
+ * encryption keys (KEKs): one from the master password, one from a high-entropy
+ * recovery key. Only ciphertext, KDF salts, and KDF parameters are persisted —
+ * an attacker with the full stored blob learns nothing without the master
+ * password or the recovery key.
  */
 
 const PBKDF2_ITERATIONS = 210_000;
 const KEY_LENGTH_BITS = 256;
-const SALT_BYTES = 16;
+const SALT_BYTES = 32; // 256-bit salt (spec §4.1 step 1)
 const IV_BYTES = 12;
+const VEK_BYTES = 32; // 256-bit vault encryption key
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -63,11 +67,14 @@ export function newKdfParams(): KdfParams {
   return { salt: toB64(randomBytes(SALT_BYTES)), iterations: PBKDF2_ITERATIONS };
 }
 
-/** Derive a non-extractable AES-GCM key from a master password. */
-export async function deriveKey(password: string, params: KdfParams): Promise<CryptoKey> {
+/**
+ * Derive a non-extractable AES-GCM key-encryption key from a secret
+ * (master password or recovery key). Used to wrap/unwrap the VEK.
+ */
+export async function deriveKey(secret: string, params: KdfParams): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey(
     "raw",
-    utf8(password),
+    utf8(secret),
     "PBKDF2",
     false,
     ["deriveKey"],
@@ -107,8 +114,8 @@ export async function open(key: CryptoKey, sealed: Sealed): Promise<string> {
 }
 
 /**
- * Verify a candidate key against a stored verifier. Used to check the master
- * password on unlock without ever comparing password material directly.
+ * Verify a candidate key against a stored verifier. Used to sanity-check the
+ * unwrapped VEK without ever comparing key material directly.
  */
 export async function verify(key: CryptoKey, verifier: Sealed): Promise<boolean> {
   try {
@@ -122,4 +129,72 @@ const VERIFIER_PLAINTEXT = "veil-verifier-v1";
 
 export async function makeVerifier(key: CryptoKey): Promise<Sealed> {
   return seal(key, VERIFIER_PLAINTEXT);
+}
+
+// ---------------------------------------------------------------------------
+// Envelope encryption: VEK + key wrapping (spec §4.1 steps 3-4)
+// ---------------------------------------------------------------------------
+
+/** Fresh random 256-bit Vault Encryption Key (raw bytes, kept only in memory). */
+export function newVek(): Uint8Array<ArrayBuffer> {
+  return randomBytes(VEK_BYTES);
+}
+
+/**
+ * Import raw VEK bytes as an AES-GCM CryptoKey. Extractable so the master
+ * password can be changed (re-wrap) without re-encrypting every record; the
+ * raw key exists only in RAM and is never persisted in the clear.
+ */
+export async function importVek(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
+}
+
+/** Wrap (encrypt) the VEK under a KEK so it can be stored at rest. */
+export async function wrapVek(kek: CryptoKey, vek: Uint8Array<ArrayBuffer>): Promise<Sealed> {
+  return seal(kek, toB64(vek));
+}
+
+/** Unwrap the VEK with a KEK. Throws if the KEK is wrong (GCM auth failure). */
+export async function unwrapVek(kek: CryptoKey, wrapped: Sealed): Promise<Uint8Array<ArrayBuffer>> {
+  return fromB64(await open(kek, wrapped));
+}
+
+/** Export the raw bytes of an (extractable) VEK for re-wrapping. */
+export async function exportVek(vekKey: CryptoKey): Promise<Uint8Array<ArrayBuffer>> {
+  const raw = await crypto.subtle.exportKey("raw", vekKey);
+  return new Uint8Array(raw) as Uint8Array<ArrayBuffer>;
+}
+
+// ---------------------------------------------------------------------------
+// Recovery key (spec §4.4): high-entropy escrow secret shown once at creation.
+// ---------------------------------------------------------------------------
+
+// RFC 4648 base32 alphabet, minus padding. 256 bits -> 52 chars, grouped by 4.
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function base32Encode(bytes: Uint8Array): string {
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) {
+    value = (value << 8) | bytes[i];
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+/** Generate a 256-bit recovery key formatted as dash-grouped base32. */
+export function newRecoveryKey(): string {
+  const raw = base32Encode(randomBytes(VEK_BYTES));
+  return (raw.match(/.{1,4}/g) ?? []).join("-");
+}
+
+/** Normalize user-entered recovery key (strip spaces/dashes, uppercase). */
+export function normalizeRecoveryKey(input: string): string {
+  return input.replace(/[\s-]/g, "").toUpperCase();
 }

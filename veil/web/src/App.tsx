@@ -4,6 +4,7 @@ import { useServer } from "./hooks/useServer";
 import { useTheme } from "./hooks/useTheme";
 import { useIdleLock } from "./hooks/useIdleLock";
 import { Lock } from "./components/Lock";
+import { RecoveryKeyNotice } from "./components/RecoveryKeyNotice";
 import { Dashboard } from "./components/Dashboard";
 import { Inbox } from "./components/Inbox";
 import { Cards } from "./components/Cards";
@@ -58,8 +59,16 @@ export default function App() {
             await vault.unlock(pw);
           }
         }}
+        onRecover={async (rk, newPw) => {
+          await vault.recover(rk, newPw);
+        }}
       />
     );
+  }
+
+  // After create/upgrade, gate the app until the one-time recovery key is saved.
+  if (vault.recoveryKey) {
+    return <RecoveryKeyNotice recoveryKey={vault.recoveryKey} onDone={vault.dismissRecoveryKey} />;
   }
 
   return (

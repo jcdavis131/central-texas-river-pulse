@@ -5,28 +5,36 @@ interface Props {
   mode: "create" | "unlock";
   error: string | null;
   onSubmit: (password: string) => Promise<void> | void;
+  onRecover: (recoveryKey: string, newPassword: string) => Promise<void> | void;
 }
 
-export function Lock({ mode, error, onSubmit }: Props) {
+export function Lock({ mode, error, onSubmit, onRecover }: Props) {
   const [pw, setPw] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [recoveryKey, setRecoveryKey] = useState("");
+  const [recovering, setRecovering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const bits = passwordEntropyBits(pw);
   const strength = bits < 40 ? "weak" : bits < 70 ? "fair" : "strong";
   const creating = mode === "create";
+  const needsConfirm = creating || recovering;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLocalError(null);
-    if (creating) {
+    if (recovering && recoveryKey.replace(/[\s-]/g, "").length < 16) {
+      return setLocalError("Enter your full recovery key.");
+    }
+    if (needsConfirm) {
       if (pw.length < 8) return setLocalError("Use at least 8 characters.");
       if (pw !== confirm) return setLocalError("Those passwords don’t match.");
     }
     setBusy(true);
     try {
-      await onSubmit(pw);
+      if (recovering) await onRecover(recoveryKey, pw);
+      else await onSubmit(pw);
     } finally {
       setBusy(false);
     }
@@ -59,25 +67,39 @@ export function Lock({ mode, error, onSubmit }: Props) {
         )}
 
         <div className="auth-card">
-          <h2>{creating ? "Create your vault" : "Unlock vault"}</h2>
+          <h2>{creating ? "Create your vault" : recovering ? "Recover your vault" : "Unlock vault"}</h2>
           <p className="lead">
             {creating
-              ? "Choose a master password. It stays on this device and can’t be recovered — so make it memorable."
-              : "Enter your master password."}
+              ? "Choose a master password. You’ll get a one-time recovery key so a forgotten password isn’t the end of the road."
+              : recovering
+                ? "Enter your recovery key and choose a new master password."
+                : "Enter your master password."}
           </p>
 
           <form onSubmit={submit}>
+            {recovering && (
+              <input
+                className="input mono"
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Recovery key (XXXX-XXXX-…)"
+                value={recoveryKey}
+                onChange={(e) => setRecoveryKey(e.target.value)}
+              />
+            )}
+
             <input
               className="input"
               type="password"
-              autoFocus
-              autoComplete={creating ? "new-password" : "current-password"}
-              placeholder="Master password"
+              autoFocus={!recovering}
+              autoComplete={needsConfirm ? "new-password" : "current-password"}
+              placeholder={recovering ? "New master password" : "Master password"}
               value={pw}
               onChange={(e) => setPw(e.target.value)}
             />
 
-            {creating && (
+            {needsConfirm && (
               <>
                 <div className={`strength strength-${strength}`}>
                   <div className="strength-track">
@@ -101,13 +123,34 @@ export function Lock({ mode, error, onSubmit }: Props) {
             {(localError || error) && <p className="error">{localError ?? error}</p>}
 
             <button className="btn btn-primary btn-block" disabled={busy || !pw}>
-              {busy ? "One moment…" : creating ? "Create vault →" : "Unlock →"}
+              {busy
+                ? "One moment…"
+                : creating
+                  ? "Create vault →"
+                  : recovering
+                    ? "Recover vault →"
+                    : "Unlock →"}
             </button>
           </form>
 
+          {!creating && (
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => {
+                setRecovering((r) => !r);
+                setLocalError(null);
+                setPw("");
+                setConfirm("");
+              }}
+            >
+              {recovering ? "← Back to unlock" : "Forgot your master password?"}
+            </button>
+          )}
+
           <p className="lock-note">
-            🔒 Zero-knowledge by design. Everything is encrypted with AES-GCM using a key
-            derived from your password — we never see it.
+            🔒 Zero-knowledge by design. A random vault key encrypts everything with
+            AES-256-GCM and is itself wrapped by your password — we never see either.
           </p>
         </div>
 

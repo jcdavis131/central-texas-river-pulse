@@ -99,9 +99,12 @@ export function IdentityDetail({ identity, server, onClose, onStatus, onUpdate, 
       <div className="modal-actions">
         {identity.status === "active" ? (
           <button className="btn" onClick={() => onStatus("paused")}>Pause</button>
-        ) : identity.status === "paused" ? (
+        ) : identity.status === "paused" || identity.status === "muted" ? (
           <button className="btn" onClick={() => onStatus("active")}>Resume</button>
         ) : null}
+        {identity.status === "active" && (
+          <button className="btn" onClick={() => onStatus("muted")}>Mute</button>
+        )}
         {identity.status !== "revoked" && (
           <button className="btn btn-warn" onClick={() => onStatus("revoked")}>Revoke</button>
         )}

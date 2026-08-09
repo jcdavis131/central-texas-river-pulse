@@ -403,7 +403,59 @@ body {
 }
 .badge-active { background: var(--ok-soft); color: var(--ok); }
 .badge-paused { background: var(--warn-soft); color: var(--warn); }
+.badge-muted { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted); }
 .badge-revoked { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------------------------------------------------------------------------
+   Recovery key (one-time escrow secret)
+--------------------------------------------------------------------------- */
+.recovery-modal {
+  max-width: 460px;
+  padding: 30px 28px;
+  text-align: center;
+}
+.recovery-modal .empty-emoji { font-size: 40px; }
+.recovery-modal h2 { margin: 8px 0 6px; font-family: var(--display); font-weight: 600; }
+.recovery-modal .lead { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+.recovery-key {
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 16px 14px;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  word-break: break-all;
+  user-select: all;
+}
+.recovery-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 16px 0 18px;
+}
+.recovery-confirm {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  text-align: left;
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.recovery-confirm input { margin-top: 2px; }
+.btn-link {
+  display: inline-block;
+  margin-top: 12px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.btn-link:hover { color: var(--ink); }
 
 /* ---------------------------------------------------------------------------
    Modal

@@ -4,11 +4,14 @@ const ICON: Record<ActivityEvent["kind"], string> = {
   identity_created: "✦",
   identity_paused: "⏸",
   identity_resumed: "▶",
+  identity_muted: "🔇",
   identity_revoked: "⊘",
   email_forwarded: "✉",
   call_screened: "☎",
   secret_updated: "🔑",
   card_issued: "▭",
+  vault_recovered: "🗝",
+  password_changed: "🔐",
 };
 
 export function Activity({ state }: { state: VaultState }) {
