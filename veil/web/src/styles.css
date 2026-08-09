@@ -707,3 +707,52 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .health-muted { background: var(--surface-2); color: var(--muted); }
 .health-items { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--ink); }
 .health-items li { margin: 3px 0; }
+
+/* ---------------------------------------------------------------------------
+   Inbox
+--------------------------------------------------------------------------- */
+.inbox { max-width: 760px; }
+.inbox-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.unread-pill { font-size: 12px; background: var(--primary); color: var(--primary-ink); border-radius: 999px; padding: 1px 9px; margin-left: 8px; vertical-align: middle; }
+.msg-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); box-shadow: var(--shadow-sm); }
+.msg-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s; }
+.msg-row:last-child { border-bottom: none; }
+.msg-row:hover { background: var(--surface-2); }
+.msg-row.unread { background: color-mix(in srgb, var(--primary-soft) 60%, transparent); }
+.msg-row.unread .msg-from { font-weight: 700; }
+.msg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.msg-from { font-size: 14px; }
+.msg-subject { font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-alias { font-size: 11.5px; }
+.msg-time { font-size: 11.5px; color: var(--faint); flex: none; }
+.msg-body { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; max-height: 320px; overflow: auto; margin: 12px 0; }
+
+/* ---------------------------------------------------------------------------
+   Cards
+--------------------------------------------------------------------------- */
+.cards-page { max-width: 760px; }
+.card-issue { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.card-issue .input { flex: 1; min-width: 160px; margin: 0; }
+.card-secret { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; margin: 12px 0; font-size: 14px; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 18px; }
+.vcard {
+  position: relative;
+  border-radius: 16px;
+  padding: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary) 0%, #3a2bd4 100%);
+  box-shadow: var(--shadow);
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.vcard.frozen { filter: grayscale(0.7) brightness(0.9); }
+.vcard-top { display: flex; align-items: center; justify-content: space-between; }
+.vcard-label { font-weight: 700; }
+.vcard .badge { background: rgba(255,255,255,0.2); color: #fff; }
+.vcard-num { font-size: 16px; letter-spacing: 0.12em; margin: 14px 0; }
+.vcard-foot { display: flex; gap: 12px; font-size: 12px; }
+.vcard-foot .dim { color: rgba(255,255,255,0.8); }
+.vcard-freeze { position: absolute; top: 14px; right: 14px; display: none; padding: 4px 10px; font-size: 12px; background: rgba(0,0,0,0.25); border-color: transparent; color: #fff; }
+.vcard:hover .vcard-freeze { display: inline-flex; }

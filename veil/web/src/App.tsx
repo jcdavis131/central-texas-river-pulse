@@ -5,20 +5,14 @@ import { useTheme } from "./hooks/useTheme";
 import { useIdleLock } from "./hooks/useIdleLock";
 import { Lock } from "./components/Lock";
 import { Dashboard } from "./components/Dashboard";
+import { Inbox } from "./components/Inbox";
+import { Cards } from "./components/Cards";
 import { Security } from "./components/Security";
 import { Generator } from "./components/Generator";
 import { Activity } from "./components/Activity";
 import { Settings } from "./components/Settings";
 
-type Tab = "identities" | "security" | "generator" | "activity" | "settings";
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: "identities", label: "Identities" },
-  { id: "security", label: "Security" },
-  { id: "generator", label: "Generator" },
-  { id: "activity", label: "Activity" },
-  { id: "settings", label: "Settings" },
-];
+type Tab = "identities" | "inbox" | "cards" | "security" | "generator" | "activity" | "settings";
 
 const THEME_ICON = { system: "🖥", light: "☀️", dark: "🌙" } as const;
 
@@ -30,6 +24,23 @@ export default function App() {
 
   const unlocked = vault.lockState === "unlocked";
   useIdleLock(vault.state.settings.autoLockMinutes ?? 15, unlocked, vault.lock);
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "identities", label: "Identities" },
+    ...(server.connected
+      ? ([
+          { id: "inbox", label: "Inbox" },
+          { id: "cards", label: "Cards" },
+        ] as { id: Tab; label: string }[])
+      : []),
+    { id: "security", label: "Security" },
+    { id: "generator", label: "Generator" },
+    { id: "activity", label: "Activity" },
+    { id: "settings", label: "Settings" },
+  ];
+
+  // If a server-only tab is selected but we're not connected, fall back.
+  const view: Tab = (tab === "inbox" || tab === "cards") && !server.connected ? "identities" : tab;
 
   if (vault.lockState === "loading") {
     return <div className="landing" />;
@@ -59,7 +70,7 @@ export default function App() {
           <span className="brand-name">Veil</span>
         </div>
         <nav className="tabs">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               className={tab === t.id ? "tab active" : "tab"}
@@ -79,7 +90,7 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {tab === "identities" && (
+        {view === "identities" && (
           <Dashboard
             state={vault.state}
             server={server}
@@ -90,10 +101,12 @@ export default function App() {
             log={vault.log}
           />
         )}
-        {tab === "security" && <Security state={vault.state} server={server} />}
-        {tab === "generator" && <Generator />}
-        {tab === "activity" && <Activity state={vault.state} />}
-        {tab === "settings" && (
+        {view === "inbox" && <Inbox server={server} />}
+        {view === "cards" && <Cards server={server} />}
+        {view === "security" && <Security state={vault.state} server={server} />}
+        {view === "generator" && <Generator />}
+        {view === "activity" && <Activity state={vault.state} />}
+        {view === "settings" && (
           <Settings
             settings={vault.state.settings}
             server={server}

@@ -35,6 +35,8 @@ export interface ServerApi {
   health: HealthInfo | null;
   error: string | null;
   busy: boolean;
+  /** Raw client for feature calls (inbox, cards) — null when not connected. */
+  client: VeilApi | null;
 
   connect(baseUrl: string, email: string, password: string, mode: "login" | "register"): Promise<boolean>;
   disconnect(): void;
@@ -148,6 +150,7 @@ export function useServer(): ServerApi {
     health,
     error,
     busy,
+    client: api,
     connect,
     disconnect,
     syncPush,

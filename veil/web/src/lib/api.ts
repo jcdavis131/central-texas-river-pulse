@@ -33,6 +33,29 @@ export interface BreachResult {
   count: number;
 }
 
+export interface InboxMessage {
+  id: string;
+  alias_address: string;
+  from_addr: string;
+  subject: string;
+  body: string;
+  received_at: string;
+  read: number;
+}
+
+export interface CardRecord {
+  id: string;
+  provider_id: string;
+  label: string;
+  last4: string;
+  brand: string;
+  exp_month: number;
+  exp_year: number;
+  monthly_limit: number | null;
+  status: string;
+  created_at: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -128,5 +151,43 @@ export class VeilApi {
       method: "POST",
       body: JSON.stringify({ password }),
     });
+  }
+
+  listInbox(alias?: string) {
+    const q = alias ? `?alias=${encodeURIComponent(alias)}` : "";
+    return this.req<{ messages: InboxMessage[]; unread: number }>(`/api/inbox${q}`);
+  }
+
+  markRead(id: string, read: boolean) {
+    return this.req<{ ok: true }>(`/api/inbox/${id}/read`, {
+      method: "POST",
+      body: JSON.stringify({ read }),
+    });
+  }
+
+  deleteMessage(id: string) {
+    return this.req<{ ok: true }>(`/api/inbox/${id}`, { method: "DELETE" });
+  }
+
+  replyMessage(id: string, body: string) {
+    return this.req<{ ok: true }>(`/api/inbox/${id}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  listCards() {
+    return this.req<{ cards: CardRecord[] }>("/api/cards");
+  }
+
+  issueCard(input: { label: string; monthlyLimit?: number }) {
+    return this.req<{ card: CardRecord; secret: { number: string; cvc: string } | null; live: boolean }>(
+      "/api/cards",
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+
+  freezeCard(id: string) {
+    return this.req<{ ok: true }>(`/api/cards/${id}/freeze`, { method: "POST" });
   }
 }
