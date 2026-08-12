@@ -101,4 +101,4 @@ npx wrangler pages deploy frontend/dist
 cd worker && npx wrangler deploy
 ```
 
-Deploys are run manually with the commands above. CI currently runs lint only (`.github/workflows/lint.yml`).
+Deploys are run manually with the commands above. CI runs TypeScript typecheck (frontend + worker) and a frontend production build on every push/PR (`.github/workflows/ci.yml`).
