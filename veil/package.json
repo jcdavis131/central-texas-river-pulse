@@ -1,0 +1,19 @@
+{
+  "name": "veil",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Veil — an open-source, self-hostable privacy identity manager: masked email/phone aliases, disposable personas, encrypted vault + sync, TOTP, and breach monitoring.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": ["web", "server"],
+  "scripts": {
+    "dev": "concurrently -n web,server -c cyan,magenta \"npm run dev -w @veil/web\" \"npm run dev -w @veil/server\"",
+    "build": "npm run build -w @veil/web && npm run build -w @veil/server",
+    "typecheck": "npm run typecheck -w @veil/web && npm run typecheck -w @veil/server",
+    "test": "npm run test -w @veil/web && npm run test -w @veil/server",
+    "start": "npm run start -w @veil/server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
