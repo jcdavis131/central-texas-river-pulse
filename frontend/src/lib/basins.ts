@@ -44,11 +44,28 @@ export const RECREATION_THRESHOLDS: Record<string, { greenMax: number, yellowMax
   'default': { greenMax: 1000, yellowMax: 5000 }
 }
 
+function bboxArea([w, s, e, n]: [number, number, number, number]): number {
+  return Math.max(0, e - w) * Math.max(0, n - s)
+}
+
+// Checked smallest-bbox-first (see getBasinForPoint) so a broad basin never shadows a
+// narrower one nested inside it, e.g. tiny Comal/San Marcos boxes sitting fully inside
+// Guadalupe's, which itself sits inside Colorado's.
+const BASINS_BY_AREA: BasinMeta[] = BASINS.filter(b => b.id !== 'all')
+  .slice()
+  .sort((a, b) => bboxArea(a.bbox) - bboxArea(b.bbox))
+
 export function getBasinForPoint(lat: number, lon: number): BasinId {
-  // naive bbox check, first match
-  for (const b of BASINS) {
-    if (b.id === 'all') continue
-    const [w,s,e,n] = b.bbox
+  // naive bbox check, first match by smallest bbox area. Iterating BASINS in its declared
+  // (display) order previously matched 'colorado' or 'guadalupe' - both broad basins whose
+  // bboxes fully contain several others - before ever reaching the more specific basins
+  // (comal, san-marcos, pedernales, llano, san-antonio) nested inside them. That silently
+  // replaced e.g. Comal's 300/1500 cfs safety thresholds with Colorado's far more permissive
+  // 5000/20000 cfs, understating flood/tubing-closure risk. Sorting by area instead of
+  // relying on array order fixes this regardless of how BASINS gets reordered or extended.
+  for (const b of BASINS_BY_AREA) {
+    if (b.id === 'colorado') continue // catch-all fallback, always checked last
+    const [w, s, e, n] = b.bbox
     if (lon >= w && lon <= e && lat >= s && lat <= n) return b.id
   }
   return 'colorado'
